@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+
+import argparse
+from Bio import SearchIO
+from distutils.spawn import find_executable
+import gzip
+from heapq import nsmallest
+from numpy import prod
+import os
+import pathlib
+import platform
+import pyfastx
+from random import randint
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+
+
+BINDIR  = pathlib.Path(__file__).resolve().parent
+AUTHOR  = 'Anicet Ebou <anicet.ebou@gmail.com>'
+URL     = 'https://github.com/koualab/conodictor.git'
+VERSION = '2.0'
+
+# Define start time
+startime = datetime.now()
+# Define command-line arguments
+parser = argparse.ArgumentParser(
+    prog            = 'conodictor',
+    formatter_class = argparse.RawDescriptionHelpFormatter,
+    usage           = 'conodictor [options] seqs.fa',
+    description     = 'conodictor predict conopeptide superfamily using PSSMs and HMMs',
+    epilog          = "Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {}".format(datetime.now().strftime("%a, %d %b %Y %H:%M:%S")))
+
+parser.add_argument('seqs',    help    = 'Specify input sequences fasta file')
+parser.add_argument('--out',   default = 'conoDictor', help = 'Specify Output directory')
+parser.add_argument('--force', action  = 'store_true', help = 'Force re-use output directory')
+parser.add_argument('--quiet', action  = 'store_true', help = 'Decrease program verbosity')
+parser.add_argument('--cpus',  help    = 'Specify number of threads')
+parser.add_argument('--debug', action  = 'store_true', help = 'Activate debug mode')
+
+args = parser.parse_args()
+
+
+# handling db directory path specification
+dbdir = os.path.join(BINDIR, 'db') 
+
+
+def main():
+    # Handling output directory creation-------------------------------------
+    if os.path.isdir(args.out):
+        if args.force:
+            msg('Reusing outdir {}'.format(args.out))
+            shutil.rmtree(args.out)
+            os.mkdir(args.out)
+        else:
+            raise NameError(
+        'Folder {} already exist!. Please change it using --out option'.format(args.out))
+    else:
+        msg('Creating output directory {}'.format(args.out))
+        os.mkdir(args.out)
+
+    # Start program ---------------------------------------------------------
+    msg('This is conodictor {}'.format(VERSION))
+    msg('Written by {}'.format(AUTHOR))
+    msg('Available at {}'.format(URL))
+    msg('Localtime is {}'.format(datetime.now().strftime('%H:%M:%S')))
+    msg('You are {user}'.format(
+        user = os.environ['USER'] if os.environ['USER'] else 'not telling me who you are'))
+    msg('Operating system is {}'.format(platform.system()))
+
+    # Handling num of cpus --------------------------------------------------
+    num_cores = os.cpu_count()
+    msg('System have {} cores'.format(num_cores))
+
+    if not args.cpus or args.cpus < 0:
+        cpus = 1
+    elif args.cpus == 0:
+        cpus = num_cores
+    elif args.cpus > num_cores:
+        msg('You have asked for {} cores, by system has only {} cores. Using all!'.format(
+            args.cpus, num_cores 
+        ))
+        cpus = num_cores
+
+    msg('We will use maximum of {} cores'.format(cpus))
+
+    # Verify presence of needed tools ---------------------------------------
+    needed_tools = ('hmmsearch', 'pfsearch')
+
+    for tool in needed_tools:
+        if find_executable(tool) is not None:
+            msg('Found {}'.format(tool))
+        else:
+            print_install_tool(tool)
+    
+    # Getting version of tools ----------------------------------------------
+    sub_hmmsearch = subprocess.run(['hmmsearch', '-h'], capture_output=True)
+    hmmsearch_match = re.findall(r'# HMMER\s+(\d+\.\d+)', sub_hmmsearch.stdout.decode('utf-8'))
+
+    sub_pfsearch = subprocess.run(['pfsearch', '-h'], capture_output=True)
+    pfsearch_match = re.findall(r"pfsearch\s+(\d+\.\d+ revision\s+\d\.\w)", sub_pfsearch.stderr.decode('utf-8'))
+    
+    # Check that version ----------------------------------------------------
+    if hmmsearch_match[0] and float(hmmsearch_match[0]) > 3:
+        hmmsearch_version = hmmsearch_match[0]
+    elif hmmsearch_match[0] and float(hmmsearch_match[0]) < 3:
+        raise ValueError('hmmsearch installed is below 3.0 version, please upgrade.')
+
+    else:
+        raise ValueError('Cannot parse HMMER version. Please check it is correctly installed')
+
+    
+
+    # Read sequence file ----------------------------------------------------
+    infa = pyfastx.Fasta(args.seqs)
+    
+    # Output some nice infos
+    msg('Your file is {gzip}'.format(
+        gzip = 'gzip compressed' if infa.is_gzip else 'not gzip compressed'))
+    msg('Your fasta file contains {} sequences and have {} total sequence length'.format(
+        len(infa), infa.size))
+    
+    # Get sequence keys
+    seqids = infa.keys()
+
+    # Write seq on file
+    with open('{}/test.fa'.format(args.out), 'w') as f:
+        f.write(">{}\n{}".format(seqids[0], infa[seqids[0]]))
+    f.close()
+
+    # Run hmmsearch on each sequence
+    hmmclass = {}
+    score = {}
+    for hmmfile in os.listdir('db/HMM'):
+        subprocess.run(['hmmsearch --cpu {} -o {}/test.hmmer {} {}/test.fa'.format(
+            cpus, args.out, os.path.join('db/HMM',hmmfile), args.out)], shell = True)
+    
+        with open('{}/test.hmmer'.format(args.out), 'r') as hmmdle:
+            for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
+                fam = record.id.split('_')[1]
+                hits = record.hits
+
+                if hits:
+                    for hit in hits:
+                        score[record.id] = hit.evalue
+                else:
+                    score[record.id] = 0
+                
+        hmmdle.close()
+
+        # Calculate probablilty for HMMs
+        phmm = 1
+        for val in score.values():
+            phmm *= val
+
+        hmmclass[fam] = phmm
+
+    # Returning predicted superfamily
+    outfile = open('{}/summary.txt'.format(args.out), 'a')
+    outfile.write('{}\t{}'.format(seqids[0], get_hmm_class(hmmclass)))
+
+
+    # Finishing -------------------------------------------------------------
+    msg('Classification finished succesfuly.')
+    msg('Check {} folder for results'.format(args.out))
+    endtime = datetime.now()
+    walltime = endtime - startime
+    msg('Walltime used (hh:mm:ss.ms): {}'.format(walltime))
+    msg('{endmsg}'.format(
+        endmsg = 'Share, enjoy and come back!' if randint(1,101) % 2 else 'Thanks you, come again.'))
+
+        
+
+        
+
+    
+        
+
+
+
+
+
+
+
+
+
+
+
+# Functions -----------------------------------------------------------------
+
+def get_hmm_class(mydict):
+    """
+    Takes a dict: {'A': 0.023123, 'B': 0.23233} and return 
+    they key of the item with the value 100 times lower than
+    any other value in dict 
+    """
+    conofam = None
+    nonzerodict = {}
+
+    for key, value in mydict.items():
+        if value != 0:
+            nonzerodict[key] = value
+
+    # If dict has only one item, then returning the key of that item
+    if len(nonzerodict) == 1:
+        conofam = next(iter(nonzerodict))
+    else:
+        # Finding the two smallest values in dict value
+        two_smallest = nsmallest(2, nonzerodict.values())
+        if two_smallest[0] == 0 and two_smallest[1] == 0:
+            conofam = 'UNKNOWN'
+        elif two_smallest[0]*100 == two_smallest[1]:
+            conofam = 'CONFLICT'
+        else:
+            conofam = list(mydict.keys())[
+                list(mydict.values()).index(two_smallest[0])
+                ]
+    
+    return conofam
+
+
+def print_install_tool(tool):
+    """
+    Print useful installation instruction for required tools
+    """
+    if tool == 'hmmsearch':
+        msg('{} not found. {}'.format(
+            tool, 'Please visit https://hmmer3.org.'))
+    elif tool == 'pfsearch':
+        msg('{} not found. {}'.format(
+            tool, 'Please visit https://github.com/sib-swiss/pftools3.'))
+    
+    sys.exit(1)
+
+
+def msg(text):
+    """
+    Produce nice message and info output on terminal
+    """
+    t = datetime.now().strftime("%H:%M:%S")
+    line = "[{}] {}".format(t, text)
+    if not args.quiet:
+        print(line, file = sys.stderr)
+
+
+def runcmd(cmd):
+    """
+    Produce nice running command output on terminal
+    """
+    msg('Running: {}'.format(cmd))
+    subprocess.run(cmd)
+
+
+def exception_handler(exception_type, exception, traceback, debug_hook = sys.excepthook):
+    """
+    Remove default debug info and traceback from python output on command line.
+    Use program --debug option to re-enable default behaviour. 
+    """
+    if args.debug:
+        debug_hook(exception_type, exception, traceback)
+    else:
+        print('{}: {}'.format(exception_type.__name__, exception))
+
+sys.excepthook = exception_handler
+
+
+if __name__ == '__main__':
+    main()
