@@ -61,6 +61,7 @@ def main():
         msg('Creating output directory {}'.format(args.out))
         os.mkdir(args.out)
 
+
     # Start program ---------------------------------------------------------
     msg('This is conodictor {}'.format(VERSION))
     msg('Written by {}'.format(AUTHOR))
@@ -69,6 +70,7 @@ def main():
     msg('You are {user}'.format(
         user = os.environ['USER'] if os.environ['USER'] else 'not telling me who you are'))
     msg('Operating system is {}'.format(platform.system()))
+
 
     # Handling num of cpus --------------------------------------------------
     num_cores = os.cpu_count()
@@ -86,6 +88,7 @@ def main():
 
     msg('We will use maximum of {} cores'.format(cpus))
 
+
     # Verify presence of needed tools ---------------------------------------
     needed_tools = ('hmmsearch', 'pfsearch')
 
@@ -95,6 +98,7 @@ def main():
         else:
             print_install_tool(tool)
     
+
     # Getting version of tools ----------------------------------------------
     sub_hmmsearch = subprocess.run(['hmmsearch', '-h'], capture_output=True)
     hmmsearch_match = re.findall(r'# HMMER\s+(\d+\.\d+)', sub_hmmsearch.stdout.decode('utf-8'))
@@ -102,6 +106,7 @@ def main():
     sub_pfsearch = subprocess.run(['pfsearch', '-h'], capture_output=True)
     pfsearch_match = re.findall(r"pfsearch\s+(\d+\.\d+ revision\s+\d\.\w)", sub_pfsearch.stderr.decode('utf-8'))
     
+
     # Check that version ----------------------------------------------------
     if hmmsearch_match[0] and float(hmmsearch_match[0]) > 3:
         hmmsearch_version = hmmsearch_match[0]
@@ -112,54 +117,63 @@ def main():
         raise ValueError('Cannot parse HMMER version. Please check it is correctly installed')
 
     
-
     # Read sequence file ----------------------------------------------------
     infa = pyfastx.Fasta(args.seqs)
     
+
     # Output some nice infos
     msg('Your file is {gzip}'.format(
         gzip = 'gzip compressed' if infa.is_gzip else 'not gzip compressed'))
     msg('Your fasta file contains {} sequences and have {} total sequence length'.format(
         len(infa), infa.size))
     
+
     # Get sequence keys
     seqids = infa.keys()
-
-    # Write seq on file
-    with open('{}/test.fa'.format(args.out), 'w') as f:
-        f.write(">{}\n{}".format(seqids[0], infa[seqids[0]]))
-    f.close()
-
-    # Run hmmsearch on each sequence
-    hmmclass = {}
-    score = {}
-    for hmmfile in os.listdir('db/HMM'):
-        subprocess.run(['hmmsearch --cpu {} -o {}/test.hmmer {} {}/test.fa'.format(
-            cpus, args.out, os.path.join('db/HMM',hmmfile), args.out)], shell = True)
     
-        with open('{}/test.hmmer'.format(args.out), 'r') as hmmdle:
-            for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
-                fam = record.id.split('_')[1]
-                hits = record.hits
 
-                if hits:
-                    for hit in hits:
-                        score[record.id] = hit.evalue
-                else:
-                    score[record.id] = 0
-                
-        hmmdle.close()
-
-        # Calculate probablilty for HMMs
-        phmm = 1
-        for val in score.values():
-            phmm *= val
-
-        hmmclass[fam] = phmm
-
-    # Returning predicted superfamily
+    # Preparing output file
     outfile = open('{}/summary.txt'.format(args.out), 'a')
-    outfile.write('{}\t{}'.format(seqids[0], get_hmm_class(hmmclass)))
+    outfile.write('sequence id\tHMM prediction')
+    
+    for seq in seqids:
+        # Write seq on file
+        with open('{}/test.fa'.format(args.out), 'w') as f:
+            f.write(">{}\n{}".format(seq, infa[seq]))
+        f.close()
+
+
+        # Run hmmsearch on each sequence
+        hmmclass = {}
+        score = {}
+        for hmmfile in os.listdir('db/HMM'):
+            subprocess.run(['hmmsearch --cpu {} -o {}/test.hmmer {} {}/test.fa'.format(
+                cpus, args.out, os.path.join('db/HMM',hmmfile), args.out)], shell = True)
+    
+            with open('{}/test.hmmer'.format(args.out), 'r') as hmmdle:
+                for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
+                    fam = record.id.split('_')[1]
+                    hits = record.hits
+                    if hits:
+                        for hit in hits:
+                            score[record.id] = hit.evalue
+                    else:
+                        score[record.id] = 1
+                
+            hmmdle.close()
+            #print(score)
+
+            # Calculate probablilty for HMMs
+            phmm = 1
+            for val in score.values():
+                phmm *= val
+
+            hmmclass[fam] = phmm
+            #print(hmmclass)
+
+
+        # Returning predicted superfamily
+        outfile.write('{}\t{}\n'.format(seq, get_hmm_class(hmmclass)))
 
 
     # Finishing -------------------------------------------------------------
@@ -189,7 +203,6 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
-
 def get_hmm_class(mydict):
     """
     Takes a dict: {'A': 0.023123, 'B': 0.23233} and return 
@@ -200,7 +213,7 @@ def get_hmm_class(mydict):
     nonzerodict = {}
 
     for key, value in mydict.items():
-        if value != 0:
+        if value != 1:
             nonzerodict[key] = value
 
     # If dict has only one item, then returning the key of that item
