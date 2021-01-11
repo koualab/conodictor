@@ -2,11 +2,13 @@
 
 import argparse
 from Bio import SearchIO
+from collections import Counter
 from distutils.spawn import find_executable
 import gzip
 from heapq import nsmallest
 from numpy import prod
 import os
+import pandas as pd
 import pathlib
 import platform
 import pyfastx
@@ -56,7 +58,7 @@ def main():
             os.mkdir(args.out)
         else:
             raise NameError(
-        'Folder {} already exist!. Please change it using --out option'.format(args.out))
+        'Default folder name conoDictor already exist!. Please change it using --out option or use --force to reuse it.')
     else:
         msg('Creating output directory {}'.format(args.out))
         os.mkdir(args.out)
@@ -134,16 +136,16 @@ def main():
 
     # Preparing output file
     outfile = open('{}/summary.txt'.format(args.out), 'a')
-    outfile.write('sequence id\tHMM prediction')
-    
+    outfile.write('sequence id\tHMM prediction\tPSSM prediction\tConoDictor prediction\n')
+
     for seq in seqids:
+
         # Write seq on file
         with open('{}/test.fa'.format(args.out), 'w') as f:
             f.write(">{}\n{}".format(seq, infa[seq]))
         f.close()
 
-
-        # Run hmmsearch on each sequence
+        # HMMs ---------------------------------------------------------------
         hmmclass = {}
         score = {}
         for hmmfile in os.listdir('db/HMM'):
@@ -161,7 +163,6 @@ def main():
                         score[record.id] = 1
                 
             hmmdle.close()
-            #print(score)
 
             # Calculate probablilty for HMMs
             phmm = 1
@@ -169,14 +170,30 @@ def main():
                 phmm *= val
 
             hmmclass[fam] = phmm
-            #print(hmmclass)
 
-
-        # Returning predicted superfamily
-        outfile.write('{}\t{}\n'.format(seq, get_hmm_class(hmmclass)))
+        # PSSMs -------------------------------------------------------------
+        nm_pssm = []
+        for pssmfile in os.listdir('db/PSSM'):
+            subprocess.run(['ps_scan.pl -w pfsearch -o pff -d {} {}/test.fa > {}/test.pssm'.format(
+                os.path.join('db/PSSM',pssmfile), args.out, args.out)], shell = True)
+            if os.stat('{}/test.pssm'.format(args.out)).st_size != 0:
+                pssm_res = pd.read_table('{}/test.pssm'.format(args.out))
+            
+                # Extracting list of matched profiles
+                matched_pssm = pssm_res[pssm_res.columns[3]].tolist()
+                for x in matched_pssm:
+                    nm_pssm.append(x.split('_')[1])
+            else:
+                pass
+        
+        outfile.write('{}\t{}\t{}\t{}\n'.format(seq, get_hmm_class(hmmclass), get_pssm_class(nm_pssm), give_conodictor_class(get_hmm_class(hmmclass), get_pssm_class(nm_pssm))))
 
 
     # Finishing -------------------------------------------------------------
+    os.remove('{}/test.hmmer'.format(args.out))
+    os.remove('{}/test.pssm'.format(args.out))
+    os.remove('{}/test.fa'.format(args.out))
+
     msg('Classification finished succesfuly.')
     msg('Check {} folder for results'.format(args.out))
     endtime = datetime.now()
@@ -187,22 +204,54 @@ def main():
 
         
 
-        
-
-    
-        
-
-
-
-
-
-
-
-
-
-
 
 # Functions -----------------------------------------------------------------
+def give_conodictor_class(hmmclass, pssmclass):
+    """
+    Gives definitive classification by combining HMM and PSSM
+    classification.
+    """
+    deffam = None
+    if hmmclass == pssmclass:
+        deffam = hmmclass
+    elif hmmclass == 'UNKNOWN' and pssmclass != 'UNKNOWN':
+        deffam = pssmclass
+    elif pssmclass == 'UNKNOWN' and hmmclass != 'UNKNOWN':
+        deffam = hmmclass
+    elif pssmclass and hmmclass == 'UNKNOWN':
+        deffam == 'UNKNOWN'
+    elif 'CONFLICT' in pssmclass and hmmclass:
+        fams_pssm = re.search('(?<=CONFLICT)(.*)and(.*)', pssmclass)
+        fams_hmm = re.search('(?<=CONFLICT)(.*)and(.*)', hmmclass)
+        #TODO
+    
+    return deffam
+
+
+def get_pssm_class(mylist):
+    """
+    Takes a list: [A, A, B, D] and return 
+    the final classification
+    """
+    x = Counter(mylist)
+    # Take the top 2 item with highest count in list
+    possible_fam = x.most_common(2)
+    
+    if len(possible_fam) == 1:
+        fam = possible_fam[0][0]
+    elif len(possible_fam) > 1:
+        if possible_fam[0][1] == possible_fam[1][1]:
+            fam = 'CONFLICT {} and {}'.format(possible_fam[0][0], possible_fam[1][0])
+        elif possible_fam[0][1] > possible_fam[1][1]:
+            fam = possible_fam[0][0]
+        else:
+            fam = possible_fam[1][0]
+    elif len(possible_fam) == 0:
+        fam = 'UNKNOWN'
+    
+    return fam
+
+
 def get_hmm_class(mydict):
     """
     Takes a dict: {'A': 0.023123, 'B': 0.23233} and return 
@@ -225,7 +274,9 @@ def get_hmm_class(mydict):
         if two_smallest[0] == 0 and two_smallest[1] == 0:
             conofam = 'UNKNOWN'
         elif two_smallest[0]*100 == two_smallest[1]:
-            conofam = 'CONFLICT'
+            conofam = 'CONFLICT {} and {}'.format(
+                list(mydict.keys())[list(mydict.values()).index(two_smallest[0])], list(mydict.keys())[list(mydict.values()).index(two_smallest[1])]
+            )
         else:
             conofam = list(mydict.keys())[
                 list(mydict.values()).index(two_smallest[0])
