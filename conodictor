@@ -6,7 +6,8 @@ from collections import Counter
 from distutils.spawn import find_executable
 import gzip
 from heapq import nsmallest
-from numpy import prod
+import logging
+import numpy as np
 import os
 import pandas as pd
 import pathlib
@@ -48,6 +49,8 @@ args = parser.parse_args()
 # handling db directory path specification
 dbdir = os.path.join(BINDIR, 'db') 
 
+# Log file
+logging.basicConfig(filename = '{}/conodictor.log'.format(args.out), level = logging.INFO)
 
 def main():
     # Handling output directory creation-------------------------------------
@@ -58,7 +61,7 @@ def main():
             os.mkdir(args.out)
         else:
             raise NameError(
-        'Default folder name conoDictor already exist!. Please change it using --out option or use --force to reuse it.')
+        'Default folder (conoDictor) already exist!. Please change it using --out option or use --force to reuse it.')
     else:
         msg('Creating output directory {}'.format(args.out))
         os.mkdir(args.out)
@@ -92,7 +95,7 @@ def main():
 
 
     # Verify presence of needed tools ---------------------------------------
-    needed_tools = ('hmmsearch', 'pfsearch')
+    needed_tools = ('hmmsearch', 'pfsearch', 'ps_scan.pl')
 
     for tool in needed_tools:
         if find_executable(tool) is not None:
@@ -108,6 +111,9 @@ def main():
     sub_pfsearch = subprocess.run(['pfsearch', '-h'], capture_output=True)
     pfsearch_match = re.findall(r"pfsearch\s+(\d+\.\d+ revision\s+\d\.\w)", sub_pfsearch.stderr.decode('utf-8'))
     
+    sub_psscan = subprocess.run(['ps_scan.pl', '-h'], capture_output=True)
+    psscan_match = re.findall(r'ps_scan version\s+(\d+\.\d+)', sub_psscan.stdout.decode('utf-8'))
+
 
     # Check that version ----------------------------------------------------
     if hmmsearch_match[0] and float(hmmsearch_match[0]) > 3:
@@ -120,19 +126,20 @@ def main():
 
     
     # Read sequence file ----------------------------------------------------
+    msg('Creating index of your fasta file')
     infa = pyfastx.Fasta(args.seqs)
-    
+    msg('Done creating fasta index')
 
     # Output some nice infos
     msg('Your file is {gzip}'.format(
         gzip = 'gzip compressed' if infa.is_gzip else 'not gzip compressed'))
     msg('Your fasta file contains {} sequences and have {} total sequence length'.format(
         len(infa), infa.size))
-    
 
     # Get sequence keys
+    msg('Launching HMM prediction')
+    msg('Launching PSSM prediction')
     seqids = infa.keys()
-    
 
     # Preparing output file
     outfile = open('{}/summary.txt'.format(args.out), 'a')
@@ -187,7 +194,8 @@ def main():
                 pass
         
         outfile.write('{}\t{}\t{}\t{}\n'.format(seq, get_hmm_class(hmmclass), get_pssm_class(nm_pssm), give_conodictor_class(get_hmm_class(hmmclass), get_pssm_class(nm_pssm))))
-
+    
+    msg('Done with HMM and PSSM prediction.')
 
     # Finishing -------------------------------------------------------------
     os.remove('{}/test.hmmer'.format(args.out))
@@ -220,10 +228,14 @@ def give_conodictor_class(hmmclass, pssmclass):
         deffam = hmmclass
     elif pssmclass and hmmclass == 'UNKNOWN':
         deffam == 'UNKNOWN'
-    elif 'CONFLICT' in pssmclass and hmmclass:
+    elif 'CONFLICT' in pssmclass and 'CONFLICT' in hmmclass:
         fams_pssm = re.search('(?<=CONFLICT)(.*)and(.*)', pssmclass)
         fams_hmm = re.search('(?<=CONFLICT)(.*)and(.*)', hmmclass)
-        #TODO
+        deffam = 'CONFLICT {}, {}, {}, and {}'.format(fams_pssm.group(1), fams_pssm.group(2), fams_hmm.group(1), fams_hmm.group(2))
+    elif 'CONFLICT' in pssmclass and not 'CONFLICT' in hmmclass:
+        deffam = hmmclass
+    elif 'CONFLICT' in hmmclass and not 'CONFLICT' in pssmclass:
+        deffam = pssmclass
     
     return deffam
 
@@ -307,6 +319,10 @@ def msg(text):
     line = "[{}] {}".format(t, text)
     if not args.quiet:
         print(line, file = sys.stderr)
+    elif args.quiet:
+        logging.info(line)
+    elif args.quiet and args.debug:
+        logging.debug(line)
 
 
 def runcmd(cmd):
@@ -324,6 +340,8 @@ def exception_handler(exception_type, exception, traceback, debug_hook = sys.exc
     """
     if args.debug:
         debug_hook(exception_type, exception, traceback)
+    elif args.debug and args.quiet:
+        msg(debug_hook(exception_type, exception, traceback))
     else:
         print('{}: {}'.format(exception_type.__name__, exception))
 
