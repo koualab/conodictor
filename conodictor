@@ -28,13 +28,15 @@ VERSION = '2.0'
 
 # Define start time
 startime = datetime.now()
+helptime = datetime.now().strftime("%a, %d %b %Y %H:%M:%S")
+
 # Define command-line arguments
 parser = argparse.ArgumentParser(
     prog            = 'conodictor',
     formatter_class = argparse.RawDescriptionHelpFormatter,
     usage           = 'conodictor [options] seqs.fa',
     description     = 'conodictor predict conopeptide superfamily using PSSMs and HMMs',
-    epilog          = "Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {}".format(datetime.now().strftime("%a, %d %b %Y %H:%M:%S")))
+    epilog          = f"Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {helptime}")
 
 parser.add_argument('seqs',    help    = 'Specify input sequences fasta file')
 parser.add_argument('--out',   default = 'conoDictor', help = 'Specify Output directory')
@@ -47,51 +49,55 @@ args = parser.parse_args()
 
 
 # handling db directory path specification
-dbdir = os.path.join(BINDIR, 'db') 
+if os.environ['CONODB']:
+    dbdir = os.environ['CONODB']
+else:
+    raise FileNotFoundError('Databases files needed for classification not found. Please set CONODB environment variable to the path where the are stored.')
 
 # Log file
-logging.basicConfig(filename = '{}/conodictor.log'.format(args.out), level = logging.INFO)
+logging.basicConfig(filename = f'{args.out}/conodictor.log', level = logging.INFO)
 
 def main():
     # Handling output directory creation-------------------------------------
     if os.path.isdir(args.out):
         if args.force:
-            msg('Reusing outdir {}'.format(args.out))
+            msg(f'Reusing outdir {args.out}')
             shutil.rmtree(args.out)
             os.mkdir(args.out)
         else:
             raise NameError(
         'Default folder (conoDictor) already exist!. Please change it using --out option or use --force to reuse it.')
     else:
-        msg('Creating output directory {}'.format(args.out))
+        msg(f'Creating output directory {args.out}')
         os.mkdir(args.out)
 
+    if os.environ['USER']:
+        user = os.environ['USER']
+    else:
+        user = 'not telling me who you are'
 
     # Start program ---------------------------------------------------------
-    msg('This is conodictor {}'.format(VERSION))
-    msg('Written by {}'.format(AUTHOR))
-    msg('Available at {}'.format(URL))
-    msg('Localtime is {}'.format(datetime.now().strftime('%H:%M:%S')))
-    msg('You are {user}'.format(
-        user = os.environ['USER'] if os.environ['USER'] else 'not telling me who you are'))
-    msg('Operating system is {}'.format(platform.system()))
+    msg(f'This is conodictor {VERSION}')
+    msg(f'Written by {AUTHOR}')
+    msg(f'Available at {URL}')
+    msg(f"Localtime is {datetime.now().strftime('%H:%M:%S')}")
+    msg(f'You are {user}')
+    msg(f'Operating system is {platform.system()}')
 
 
     # Handling num of cpus --------------------------------------------------
     num_cores = os.cpu_count()
-    msg('System have {} cores'.format(num_cores))
+    msg('System have {num_cores} cores')
 
     if not args.cpus or args.cpus < 0:
         cpus = 1
     elif args.cpus == 0:
         cpus = num_cores
     elif args.cpus > num_cores:
-        msg('You have asked for {} cores, by system has only {} cores. Using all!'.format(
-            args.cpus, num_cores 
-        ))
+        msg(f'You have asked for {args.cpus} cores, by system has only {num_cores} cores. Using all!')
         cpus = num_cores
 
-    msg('We will use maximum of {} cores'.format(cpus))
+    msg(f'We will use maximum of {cpus} cores')
 
 
     # Verify presence of needed tools ---------------------------------------
@@ -99,7 +105,7 @@ def main():
 
     for tool in needed_tools:
         if find_executable(tool) is not None:
-            msg('Found {}'.format(tool))
+            msg(f'Found {tool}')
         else:
             print_install_tool(tool)
     
@@ -131,10 +137,12 @@ def main():
     msg('Done creating fasta index')
 
     # Output some nice infos
-    msg('Your file is {gzip}'.format(
-        gzip = 'gzip compressed' if infa.is_gzip else 'not gzip compressed'))
-    msg('Your fasta file contains {} sequences and have {} total sequence length'.format(
-        len(infa), infa.size))
+    if infa.is_gzip:
+        gzip = 'gzip compressed'
+    else:
+        gzip = 'not gzip compressed'
+    msg(f'Your file is {gzip}')
+    msg(f'Your fasta file contains {infa} sequences and have {infa.size} total sequence length.')
 
     # Get sequence keys
     msg('Launching HMM prediction')
@@ -142,24 +150,23 @@ def main():
     seqids = infa.keys()
 
     # Preparing output file
-    outfile = open('{}/summary.txt'.format(args.out), 'a')
+    outfile = open(f'{args.out}/summary.txt', 'a')
     outfile.write('sequence id\tHMM prediction\tPSSM prediction\tConoDictor prediction\n')
 
     for seq in seqids:
 
         # Write seq on file
         with open('{}/test.fa'.format(args.out), 'w') as f:
-            f.write(">{}\n{}".format(seq, infa[seq]))
+            f.write(f">{seq}\n{infa[seq]}")
         f.close()
 
         # HMMs ---------------------------------------------------------------
         hmmclass = {}
         score = {}
         for hmmfile in os.listdir('db/HMM'):
-            subprocess.run(['hmmsearch --cpu {} -o {}/test.hmmer {} {}/test.fa'.format(
-                cpus, args.out, os.path.join('db/HMM',hmmfile), args.out)], shell = True)
+            subprocess.run([f"hmmsearch --cpu {cpus} -o {args.out}/test.hmmer {os.path.join('db/HMM',hmmfile)} {args.out}/test.fa"], shell = True)
     
-            with open('{}/test.hmmer'.format(args.out), 'r') as hmmdle:
+            with open('{args.out}/test.hmmer', 'r') as hmmdle:
                 for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
                     fam = record.id.split('_')[1]
                     hits = record.hits
@@ -181,10 +188,9 @@ def main():
         # PSSMs -------------------------------------------------------------
         nm_pssm = []
         for pssmfile in os.listdir('db/PSSM'):
-            subprocess.run(['ps_scan.pl -w pfsearch -o pff -d {} {}/test.fa > {}/test.pssm'.format(
-                os.path.join('db/PSSM',pssmfile), args.out, args.out)], shell = True)
-            if os.stat('{}/test.pssm'.format(args.out)).st_size != 0:
-                pssm_res = pd.read_table('{}/test.pssm'.format(args.out))
+            subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join('db/PSSM',pssmfile)} {args.out}/test.fa > {args.out}/test.pssm"], shell = True)
+            if os.stat(f'{args.out}/test.pssm').st_size != 0:
+                pssm_res = pd.read_table(f'{args.out}/test.pssm')
             
                 # Extracting list of matched profiles
                 matched_pssm = pssm_res[pssm_res.columns[3]].tolist()
@@ -193,22 +199,27 @@ def main():
             else:
                 pass
         
-        outfile.write('{}\t{}\t{}\t{}\n'.format(seq, get_hmm_class(hmmclass), get_pssm_class(nm_pssm), give_conodictor_class(get_hmm_class(hmmclass), get_pssm_class(nm_pssm))))
+        outfile.write(f"{seq}\t{get_hmm_class(hmmclass)}\t{get_pssm_class(nm_pssm)}\t{give_conodictor_class(get_hmm_class(hmmclass), get_pssm_class(nm_pssm))}\n")
     
     msg('Done with HMM and PSSM prediction.')
+    outfile.close()
 
     # Finishing -------------------------------------------------------------
-    os.remove('{}/test.hmmer'.format(args.out))
-    os.remove('{}/test.pssm'.format(args.out))
-    os.remove('{}/test.fa'.format(args.out))
-
+    os.remove(f'{args.out}/test.hmmer')
+    os.remove(f'{args.out}/test.pssm')
+    os.remove(f'{args.out}/test.fa')
+    
+    if randint(1, 1999) % 2:
+        endmsg = f"Nice to have you {os.environ['USER']}. Share, enjoy and come back!"
+    else:
+        enmsg = f"Thanks you {os.environ['USER']}, come again."
+    
     msg('Classification finished succesfuly.')
-    msg('Check {} folder for results'.format(args.out))
+    msg('fCheck {args.out} folder for results')
     endtime = datetime.now()
     walltime = endtime - startime
-    msg('Walltime used (hh:mm:ss.ms): {}'.format(walltime))
-    msg('{endmsg}'.format(
-        endmsg = 'Share, enjoy and come back!' if randint(1,101) % 2 else 'Thanks you, come again.'))
+    msg('Walltime used (hh:mm:ss.ms): {walltime}')
+    msg('{endmsg}')
 
         
 
@@ -231,11 +242,13 @@ def give_conodictor_class(hmmclass, pssmclass):
     elif 'CONFLICT' in pssmclass and 'CONFLICT' in hmmclass:
         fams_pssm = re.search('(?<=CONFLICT)(.*)and(.*)', pssmclass)
         fams_hmm = re.search('(?<=CONFLICT)(.*)and(.*)', hmmclass)
-        deffam = 'CONFLICT {}, {}, {}, and {}'.format(fams_pssm.group(1), fams_pssm.group(2), fams_hmm.group(1), fams_hmm.group(2))
+        deffam = f'CONFLICT {fams_pssm.group(1)}, {fams_pssm.group(2)}, {fams_hmm.group(1)}, and {fams_hmm.group(2)}'
     elif 'CONFLICT' in pssmclass and not 'CONFLICT' in hmmclass:
         deffam = hmmclass
     elif 'CONFLICT' in hmmclass and not 'CONFLICT' in pssmclass:
         deffam = pssmclass
+    elif pssmclass != hmmclass:
+        deffam = f'CONFLICT {hmmclass} and {pssmclass}'
     
     return deffam
 
@@ -253,7 +266,7 @@ def get_pssm_class(mylist):
         fam = possible_fam[0][0]
     elif len(possible_fam) > 1:
         if possible_fam[0][1] == possible_fam[1][1]:
-            fam = 'CONFLICT {} and {}'.format(possible_fam[0][0], possible_fam[1][0])
+            fam = f'CONFLICT {possible_fam[0][0]} and {possible_fam[1][0]}'
         elif possible_fam[0][1] > possible_fam[1][1]:
             fam = possible_fam[0][0]
         else:
@@ -286,9 +299,9 @@ def get_hmm_class(mydict):
         if two_smallest[0] == 0 and two_smallest[1] == 0:
             conofam = 'UNKNOWN'
         elif two_smallest[0]*100 == two_smallest[1]:
-            conofam = 'CONFLICT {} and {}'.format(
-                list(mydict.keys())[list(mydict.values()).index(two_smallest[0])], list(mydict.keys())[list(mydict.values()).index(two_smallest[1])]
-            )
+            value1 = list(mydict.keys())[list(mydict.values()).index(two_smallest[0])]
+            value2 = list(mydict.keys())[list(mydict.values()).index(two_smallest[1])]
+            conofam = 'CONFLICT {value1} and {value2}'
         else:
             conofam = list(mydict.keys())[
                 list(mydict.values()).index(two_smallest[0])
@@ -302,11 +315,9 @@ def print_install_tool(tool):
     Print useful installation instruction for required tools
     """
     if tool == 'hmmsearch':
-        msg('{} not found. {}'.format(
-            tool, 'Please visit https://hmmer3.org.'))
+        msg(f'{tool} not found. Please visit https://hmmer3.org.')
     elif tool == 'pfsearch':
-        msg('{} not found. {}'.format(
-            tool, 'Please visit https://github.com/sib-swiss/pftools3.'))
+        msg(f'{tool} not found. Please visit https://github.com/sib-swiss/pftools3.')
     
     sys.exit(1)
 
@@ -316,7 +327,7 @@ def msg(text):
     Produce nice message and info output on terminal
     """
     t = datetime.now().strftime("%H:%M:%S")
-    line = "[{}] {}".format(t, text)
+    line = f"[{t}] {text}"
     if not args.quiet:
         print(line, file = sys.stderr)
     elif args.quiet:
@@ -329,7 +340,7 @@ def runcmd(cmd):
     """
     Produce nice running command output on terminal
     """
-    msg('Running: {}'.format(cmd))
+    msg(f'Running: {cmd}')
     subprocess.run(cmd)
 
 
@@ -343,7 +354,7 @@ def exception_handler(exception_type, exception, traceback, debug_hook = sys.exc
     elif args.debug and args.quiet:
         msg(debug_hook(exception_type, exception, traceback))
     else:
-        print('{}: {}'.format(exception_type.__name__, exception))
+        print(f'{exception_type.__name__}: {exception}')
 
 sys.excepthook = exception_handler
 
