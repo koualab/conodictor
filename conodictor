@@ -6,20 +6,16 @@ from collections import Counter
 from distutils.spawn import find_executable
 import gzip
 from heapq import nsmallest
-import logging
-import numpy as np
 import os
 import pandas as pd
 import pathlib
 import platform
 import pyfastx
-from random import randint
 import re
 import shutil
 import subprocess
 import sys
 from datetime import datetime
-
 
 BINDIR  = pathlib.Path(__file__).resolve().parent
 AUTHOR  = 'Anicet Ebou <anicet.ebou@gmail.com>'
@@ -36,26 +32,24 @@ parser = argparse.ArgumentParser(
     formatter_class = argparse.RawDescriptionHelpFormatter,
     usage           = 'conodictor [options] seqs.fa',
     description     = 'conodictor predict conopeptide superfamily using PSSMs and HMMs',
-    epilog          = f"Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {helptime}")
+    epilog          = f"Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {helptime}.")
 
 parser.add_argument('seqs',    help    = 'Specify input sequences fasta file')
-parser.add_argument('--out',   default = 'conoDictor', help = 'Specify Output directory')
+parser.add_argument('--out',   type    = pathlib.Path, default = 'conoDictor', help = 'Specify Output directory')
 parser.add_argument('--force', action  = 'store_true', help = 'Force re-use output directory')
 parser.add_argument('--quiet', action  = 'store_true', help = 'Decrease program verbosity')
-parser.add_argument('--cpus',  help    = 'Specify number of threads')
+parser.add_argument('--cpus',  type = int            , default = 1,            help = 'Specify number of threads')
 parser.add_argument('--debug', action  = 'store_true', help = 'Activate debug mode')
 
 args = parser.parse_args()
 
 
 # handling db directory path specification
-if os.environ['CONODB']:
-    dbdir = os.environ['CONODB']
+dbdir = os.environ['CONODB']
+if dbdir:
+    pass
 else:
     raise FileNotFoundError('Databases files needed for classification not found. Please set CONODB environment variable to the path where the are stored.')
-
-# Log file
-logging.basicConfig(filename = f'{args.out}/conodictor.log', level = logging.INFO)
 
 def main():
     # Handling output directory creation-------------------------------------
@@ -87,16 +81,12 @@ def main():
 
     # Handling num of cpus --------------------------------------------------
     num_cores = os.cpu_count()
-    msg('System have {num_cores} cores')
-
-    if not args.cpus or args.cpus < 0:
-        cpus = 1
-    elif args.cpus == 0:
-        cpus = num_cores
-    elif args.cpus > num_cores:
+    msg(f'System have {num_cores} cores')
+    
+    cpus = args.cpus
+    if cpus > num_cores:
         msg(f'You have asked for {args.cpus} cores, by system has only {num_cores} cores. Using all!')
         cpus = num_cores
-
     msg(f'We will use maximum of {cpus} cores')
 
 
@@ -142,21 +132,18 @@ def main():
     else:
         gzip = 'not gzip compressed'
     msg(f'Your file is {gzip}')
-    msg(f'Your fasta file contains {infa} sequences and have {infa.size} total sequence length.')
 
     # Get sequence keys
-    msg('Launching HMM prediction')
-    msg('Launching PSSM prediction')
+    msg('Launching HMM and PSSM prediction')
     seqids = infa.keys()
 
     # Preparing output file
     outfile = open(f'{args.out}/summary.txt', 'a')
     outfile.write('sequence id\tHMM prediction\tPSSM prediction\tConoDictor prediction\n')
-
+ 
     for seq in seqids:
-
         # Write seq on file
-        with open('{}/test.fa'.format(args.out), 'w') as f:
+        with open(f'{args.out}/test.fa', 'w') as f:
             f.write(f">{seq}\n{infa[seq]}")
         f.close()
 
@@ -165,8 +152,7 @@ def main():
         score = {}
         for hmmfile in os.listdir('db/HMM'):
             subprocess.run([f"hmmsearch --cpu {cpus} -o {args.out}/test.hmmer {os.path.join('db/HMM',hmmfile)} {args.out}/test.fa"], shell = True)
-    
-            with open('{args.out}/test.hmmer', 'r') as hmmdle:
+            with open(f'{args.out}/test.hmmer', 'r') as hmmdle:
                 for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
                     fam = record.id.split('_')[1]
                     hits = record.hits
@@ -177,30 +163,35 @@ def main():
                         score[record.id] = 1
                 
             hmmdle.close()
-
+            
             # Calculate probablilty for HMMs
             phmm = 1
             for val in score.values():
                 phmm *= val
 
             hmmclass[fam] = phmm
-
+        
+        
         # PSSMs -------------------------------------------------------------
+        
         nm_pssm = []
         for pssmfile in os.listdir('db/PSSM'):
             subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join('db/PSSM',pssmfile)} {args.out}/test.fa > {args.out}/test.pssm"], shell = True)
+            #start_pssm = time()
             if os.stat(f'{args.out}/test.pssm').st_size != 0:
                 pssm_res = pd.read_table(f'{args.out}/test.pssm')
-            
+
                 # Extracting list of matched profiles
                 matched_pssm = pssm_res[pssm_res.columns[3]].tolist()
-                for x in matched_pssm:
-                    nm_pssm.append(x.split('_')[1])
+                nm_pssm = [x.split('_')[1] for x in matched_pssm]
             else:
                 pass
+           # end_pssm = time()
+            #print('PSSM time')
+            #print(end_pssm-start_pssm)
         
-        outfile.write(f"{seq}\t{get_hmm_class(hmmclass)}\t{get_pssm_class(nm_pssm)}\t{give_conodictor_class(get_hmm_class(hmmclass), get_pssm_class(nm_pssm))}\n")
-    
+        outfile.write(f"{seq}\t{get_hmm_class(hmmclass)}\t{get_pssm_class(nm_pssm)}\n")
+        
     msg('Done with HMM and PSSM prediction.')
     outfile.close()
 
@@ -209,17 +200,15 @@ def main():
     os.remove(f'{args.out}/test.pssm')
     os.remove(f'{args.out}/test.fa')
     
-    if randint(1, 1999) % 2:
-        endmsg = f"Nice to have you {os.environ['USER']}. Share, enjoy and come back!"
-    else:
-        enmsg = f"Thanks you {os.environ['USER']}, come again."
-    
     msg('Classification finished succesfuly.')
-    msg('fCheck {args.out} folder for results')
+    msg(f'Check {args.out} folder for results')
     endtime = datetime.now()
     walltime = endtime - startime
-    msg('Walltime used (hh:mm:ss.ms): {walltime}')
-    msg('{endmsg}')
+    msg(f'Walltime used (hh:mm:ss.ms): {walltime}')
+    if 2021 % 2:
+        msg('Nice to have you. Share, enjoy and come back!')
+    else:
+        msg('Thanks you, come again.')
 
         
 
@@ -301,7 +290,7 @@ def get_hmm_class(mydict):
         elif two_smallest[0]*100 == two_smallest[1]:
             value1 = list(mydict.keys())[list(mydict.values()).index(two_smallest[0])]
             value2 = list(mydict.keys())[list(mydict.values()).index(two_smallest[1])]
-            conofam = 'CONFLICT {value1} and {value2}'
+            conofam = f'CONFLICT {value1} and {value2}'
         else:
             conofam = list(mydict.keys())[
                 list(mydict.values()).index(two_smallest[0])
@@ -330,10 +319,7 @@ def msg(text):
     line = f"[{t}] {text}"
     if not args.quiet:
         print(line, file = sys.stderr)
-    elif args.quiet:
-        logging.info(line)
-    elif args.quiet and args.debug:
-        logging.debug(line)
+    
 
 
 def runcmd(cmd):
@@ -351,10 +337,8 @@ def exception_handler(exception_type, exception, traceback, debug_hook = sys.exc
     """
     if args.debug:
         debug_hook(exception_type, exception, traceback)
-    elif args.debug and args.quiet:
-        msg(debug_hook(exception_type, exception, traceback))
     else:
-        print(f'{exception_type.__name__}: {exception}')
+        msg(debug_hook(exception_type, exception, traceback))
 
 sys.excepthook = exception_handler
 
