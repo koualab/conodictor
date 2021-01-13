@@ -125,7 +125,7 @@ def main():
 
     # Preparing output file
     outfile = open(f'{args.out}/summary.txt', 'a')
-    outfile.write('sequence id\tHMM prediction\tPSSM prediction\tConoDictor prediction\n')
+    outfile.write('sequence\thmm_pred\tpssm_pred\tdefinitive_pred\n')
  
     for seq in seqids:
         # Write seq on file

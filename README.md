@@ -78,10 +78,11 @@ conodictor seqs.fa.gz
 conodictor_summary.txt
 
 
-sequence id HMM prediction  PSSM prediction conoDictor definitive prediction
-SEQ_ID_1    A   A   A
-SEQ_ID_2    B   D   CONFLICT B and D
-SEQ_ID_3    O1  O1  O1
+sequence  hmm_pred  pssm_pred definitive_pred
+SEQ_ID_1  A A A
+SEQ_ID_2  B D CONFLICT B and D
+SEQ_ID_3  O1  O1  O1
+SEQ_ID_4  UNKNOWN UNKNOWN
 ...
 
 ```
@@ -101,8 +102,8 @@ Setup:
          --debug       Activate debug mode
 
 Standard meta-options:
-         --usage, -u     Print program usage and exit
-         --help, -h      Print help and exit
+         --usage, -u   Print program usage and exit
+         --help, -h    Print help and exit
 
 ```
   
