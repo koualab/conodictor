@@ -17,7 +17,6 @@ import subprocess
 import sys
 from datetime import datetime
 
-BINDIR  = pathlib.Path(__file__).resolve().parent
 AUTHOR  = 'Anicet Ebou <anicet.ebou@gmail.com>'
 URL     = 'https://github.com/koualab/conodictor.git'
 VERSION = '2.0'
@@ -38,11 +37,9 @@ parser.add_argument('seqs',    help    = 'Specify input sequences fasta file')
 parser.add_argument('--out',   type    = pathlib.Path, default = 'conoDictor', help = 'Specify Output directory')
 parser.add_argument('--force', action  = 'store_true', help = 'Force re-use output directory')
 parser.add_argument('--quiet', action  = 'store_true', help = 'Decrease program verbosity')
-parser.add_argument('--cpus',  type = int            , default = 1,            help = 'Specify number of threads')
 parser.add_argument('--debug', action  = 'store_true', help = 'Activate debug mode')
 
 args = parser.parse_args()
-
 
 # handling db directory path specification
 dbdir = os.environ['CONODB']
@@ -78,21 +75,9 @@ def main():
     msg(f'You are {user}')
     msg(f'Operating system is {platform.system()}')
 
-
-    # Handling num of cpus --------------------------------------------------
-    num_cores = os.cpu_count()
-    msg(f'System have {num_cores} cores')
-    
-    cpus = args.cpus
-    if cpus > num_cores:
-        msg(f'You have asked for {args.cpus} cores, by system has only {num_cores} cores. Using all!')
-        cpus = num_cores
-    msg(f'We will use maximum of {cpus} cores')
-
-
     # Verify presence of needed tools ---------------------------------------
     needed_tools = ('hmmsearch', 'pfsearch', 'ps_scan.pl')
-
+    
     for tool in needed_tools:
         if find_executable(tool) is not None:
             msg(f'Found {tool}')
@@ -151,7 +136,7 @@ def main():
         hmmclass = {}
         score = {}
         for hmmfile in os.listdir('db/HMM'):
-            subprocess.run([f"hmmsearch --cpu {cpus} -o {args.out}/test.hmmer {os.path.join('db/HMM',hmmfile)} {args.out}/test.fa"], shell = True)
+            subprocess.run([f"hmmsearch -o {args.out}/test.hmmer {os.path.join(dbdir,'HMM',hmmfile)} {args.out}/test.fa"], shell = True)
             with open(f'{args.out}/test.hmmer', 'r') as hmmdle:
                 for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
                     fam = record.id.split('_')[1]
@@ -173,11 +158,9 @@ def main():
         
         
         # PSSMs -------------------------------------------------------------
-        
         nm_pssm = []
         for pssmfile in os.listdir('db/PSSM'):
-            subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join('db/PSSM',pssmfile)} {args.out}/test.fa > {args.out}/test.pssm"], shell = True)
-            #start_pssm = time()
+            subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join(dbdir, 'PSSM', pssmfile)} {args.out}/test.fa > {args.out}/test.pssm"], shell = True)
             if os.stat(f'{args.out}/test.pssm').st_size != 0:
                 pssm_res = pd.read_table(f'{args.out}/test.pssm')
 
@@ -186,9 +169,6 @@ def main():
                 nm_pssm = [x.split('_')[1] for x in matched_pssm]
             else:
                 pass
-           # end_pssm = time()
-            #print('PSSM time')
-            #print(end_pssm-start_pssm)
         
         outfile.write(f"{seq}\t{get_hmm_class(hmmclass)}\t{get_pssm_class(nm_pssm)}\n")
         
@@ -305,7 +285,7 @@ def print_install_tool(tool):
     """
     if tool == 'hmmsearch':
         msg(f'{tool} not found. Please visit https://hmmer3.org.')
-    elif tool == 'pfsearch':
+    elif tool == 'pfsearch' or tool == 'ps_scan.pl':
         msg(f'{tool} not found. Please visit https://github.com/sib-swiss/pftools3.')
     
     sys.exit(1)
@@ -319,15 +299,6 @@ def msg(text):
     line = f"[{t}] {text}"
     if not args.quiet:
         print(line, file = sys.stderr)
-    
-
-
-def runcmd(cmd):
-    """
-    Produce nice running command output on terminal
-    """
-    msg(f'Running: {cmd}')
-    subprocess.run(cmd)
 
 
 def exception_handler(exception_type, exception, traceback, debug_hook = sys.excepthook):
