@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser(
     prog            = 'conodictor',
     formatter_class = argparse.RawDescriptionHelpFormatter,
     usage           = 'conodictor [options] seqs.fa',
-    description     = 'conodictor predict conopeptide superfamily using PSSMs and HMMs',
+    description     = 'ConoDictor predict conopeptides superfamily using PSSMs and HMMs.',
     epilog          = f"Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {helptime}.")
 
 parser.add_argument('seqs',    help    = 'Specify input sequences fasta file')
@@ -41,14 +41,15 @@ parser.add_argument('--debug', action  = 'store_true', help = 'Activate debug mo
 
 args = parser.parse_args()
 
-# handling db directory path specification
-dbdir = os.environ['CONODB']
-if dbdir:
-    pass
-else:
-    raise FileNotFoundError('Databases files needed for classification not found. Please set CONODB environment variable to the path where the are stored.')
-
 def main():
+    # handling db directory path specification
+    dbdir = os.environ['CONODB']
+    if dbdir:
+        pass
+    else:
+        raise FileNotFoundError('Databases files needed for classification not found. Please set CONODB environment variable to the path where the are stored.')
+    
+
     # Handling output directory creation-------------------------------------
     if os.path.isdir(args.out):
         if args.force:

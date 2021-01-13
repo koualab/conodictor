@@ -90,20 +90,19 @@ SEQ_ID_3    O1  O1  O1
 
 ```
 General:
-    seqs          Specify input fasta file [required]
+         seqs          Specify input fasta file [required]
 
 Outputs:
-	--out         Specify output folder name
-	--force       Force reuse of output folder
+         --out         Specify output folder name
+         --force       Force reuse of output folder
 
 Setup:
-	--quiet       Decrease verbosity
-    --debug       Activate debug mode
+         --quiet       Decrease verbosity
+         --debug       Activate debug mode
 
 Standard meta-options:
-	--usage, -u     Print program usage and exit
-	--man           Print man page
-	--help, -h      Print help and exit
+         --usage, -u     Print program usage and exit
+         --help, -h      Print help and exit
 
 ```
   
