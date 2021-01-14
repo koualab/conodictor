@@ -35,14 +35,16 @@ parser = argparse.ArgumentParser(
     epilog          = f"Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {helptime}.")
 
 parser.add_argument('seqs',    help    = 'Specify input sequences fasta file')
-parser.add_argument('--out',   type    = pathlib.Path, default = 'conoDictor', help = 'Specify Output directory')
-parser.add_argument('--force', action  = 'store_true', help = 'Force re-use output directory')
+out_group = parser.add_mutually_exclusive_group()
+out_group.add_argument('--out',   type    = pathlib.Path, default = 'conoDictor', help = 'Specify Output directory')
+out_group.add_argument('--force', action  = 'store_true', help = 'Force re-use output directory')
 parser.add_argument('--quiet', action  = 'store_true', help = 'Decrease program verbosity')
 parser.add_argument('--debug', action  = 'store_true', help = 'Activate debug mode')
 
 args = parser.parse_args()
 
 def main():
+
     # handling db directory path specification
     try:
         dbdir = os.environ['CONODB']
@@ -191,7 +193,7 @@ def main():
     endtime = datetime.now()
     walltime = endtime - startime
     msg(f'Walltime used (hh:mm:ss.ms): {walltime}')
-    if 2021 % 2:
+    if len(seqids) % 2:
         msg('Nice to have you. Share, enjoy and come back!')
     else:
         msg('Thanks you, come again.')
