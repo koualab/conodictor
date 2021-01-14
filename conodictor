@@ -186,7 +186,7 @@ def main():
     msg('Creating donut plot')
     donut_graph()
     msg('Done creating donut plot')
-    
+
     msg(f'Check {args.out} folder for results')
     endtime = datetime.now()
     walltime = endtime - startime
@@ -207,11 +207,13 @@ def donut_graph():
     data = pd.read_table(f'{args.out}/summary.txt')
     plot_data = data[data.columns[3]].tolist()
     data_count = Counter(plot_data)
-    labels = [x for x in data_count.keys()]
+    labels = []
+    for k, v in data_count.items():
+        labels.append(f'{k}: {v}')
     values = [x for x in data_count.values()]
 
     # White circle
-    blank_circle = plt.Circle((0, 0), 0.4, color = 'white')
+    blank_circle = plt.Circle((0, 0), 0.5, color = 'white')
 
     # Give color names
     plt.pie(values, labels = labels, wedgeprops = {'linewidth': 3, 'edgecolor': 'white'})
