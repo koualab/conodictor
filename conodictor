@@ -6,6 +6,7 @@ from collections import Counter
 from distutils.spawn import find_executable
 import gzip
 from heapq import nsmallest
+from matplotlib import pyplot as plt
 import os
 import pandas as pd
 import pathlib
@@ -43,11 +44,11 @@ args = parser.parse_args()
 
 def main():
     # handling db directory path specification
-    dbdir = os.environ['CONODB']
-    if dbdir:
-        pass
-    else:
-        raise FileNotFoundError('Databases files needed for classification not found. Please set CONODB environment variable to the path where the are stored.')
+    try:
+        dbdir = os.environ['CONODB']
+    except KeyError:
+        msg('Databases files needed for classification not found in $PATH. Please set CONODB environment variable to the path where the HMMs and PSSMs are stored.')
+        sys.exit(1)
     
 
     # Handling output directory creation-------------------------------------
@@ -63,9 +64,9 @@ def main():
         msg(f'Creating output directory {args.out}')
         os.mkdir(args.out)
 
-    if os.environ['USER']:
+    try:
         user = os.environ['USER']
-    else:
+    except KeyError:
         user = 'not telling me who you are'
 
     # Start program ---------------------------------------------------------
@@ -171,7 +172,7 @@ def main():
             else:
                 pass
         
-        outfile.write(f"{seq}\t{get_hmm_class(hmmclass)}\t{get_pssm_class(nm_pssm)}\n")
+        outfile.write(f"{seq}\t{get_hmm_class(hmmclass)}\t{get_pssm_class(nm_pssm)}\t{give_conodictor_class(get_hmm_class(hmmclass), get_pssm_class(nm_pssm))}\n")
         
     msg('Done with HMM and PSSM prediction.')
     outfile.close()
@@ -182,6 +183,10 @@ def main():
     os.remove(f'{args.out}/test.fa')
     
     msg('Classification finished succesfuly.')
+    msg('Creating donut plot')
+    donut_graph()
+    msg('Done creating donut plot')
+    
     msg(f'Check {args.out} folder for results')
     endtime = datetime.now()
     walltime = endtime - startime
@@ -195,6 +200,26 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
+def donut_graph():
+    """
+    Make a donut graph from output file.
+    """
+    data = pd.read_table(f'{args.out}/summary.txt')
+    plot_data = data[data.columns[3]].tolist()
+    data_count = Counter(plot_data)
+    labels = [x for x in data_count.keys()]
+    values = [x for x in data_count.values()]
+
+    # White circle
+    blank_circle = plt.Circle((0, 0), 0.4, color = 'white')
+
+    # Give color names
+    plt.pie(values, labels = labels, wedgeprops = {'linewidth': 3, 'edgecolor': 'white'})
+    p = plt.gcf()
+    p.gca().add_artist(blank_circle)
+    plt.savefig(f'{args.out}/superfamilies_distribution.png', dpi = 300)
+
+
 def give_conodictor_class(hmmclass, pssmclass):
     """
     Gives definitive classification by combining HMM and PSSM
@@ -310,7 +335,7 @@ def exception_handler(exception_type, exception, traceback, debug_hook = sys.exc
     if args.debug:
         debug_hook(exception_type, exception, traceback)
     else:
-        msg(debug_hook(exception_type, exception, traceback))
+        msg(f'{exception_type.__name__}, {exception}')
 
 sys.excepthook = exception_handler
 
