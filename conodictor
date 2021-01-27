@@ -2,6 +2,9 @@
 
 import argparse
 from Bio import SearchIO
+from Bio import BiopythonWarning
+import warnings
+from Bio.Seq import reverse_complement, translate
 from collections import Counter
 from distutils.spawn import find_executable
 import gzip
@@ -111,20 +114,42 @@ def main():
 
     
     # Read sequence file ----------------------------------------------------
-    msg('Creating index of your fasta file')
+    
     infa = pyfastx.Fasta(args.seqs)
-    msg('Done creating fasta index')
 
-    # Output some nice infos
     if infa.is_gzip:
         gzip = 'gzip compressed'
     else:
         gzip = 'not gzip compressed'
     msg(f'Your file is {gzip}')
 
+    if infa.type == 'DNA':
+        msg(f'You provided DNA fasta file')
+        msg(f'Translating input sequences')
+        with open(f'{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa', 'w') as protfile:
+            for sequence in infa:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    protseq = translate_seq(sequence.seq)
+                    for idx, frame in enumerate(protseq):
+                        seq_letters = [frame[i:i+60] for i in range(0, len(frame), 60)]
+                        nl = '\n'
+                        protfile.write(f">{sequence.name}_frame={idx + 1}\n{nl.join(map(str,seq_letters))}\n")
+    elif infa.type == 'protein':
+        msg(f'You provided protein fasta file')
+    else:
+        msg(f'Your file is not a DNA or protein file, please provide a DNA or protein fasta file')
+        sys.exit(0)
+
+    
+    msg('Creating index of your fasta file')
+    infile = pyfastx.Fasta(f"{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa")
+    seqids = infile.keys()
+    msg('Done creating fasta index')
+
+
     # Get sequence keys
     msg('Launching HMM and PSSM prediction')
-    seqids = infa.keys()
 
     # Preparing output file
     outfile = open(f'{args.out}/summary.txt', 'a')
@@ -140,7 +165,7 @@ def main():
         hmmclass = {}
         score = {}
         for hmmfile in os.listdir('db/HMM'):
-            subprocess.run([f"hmmsearch -o {args.out}/test.hmmer {os.path.join(dbdir,'HMM',hmmfile)} {args.out}/test.fa"], shell = True)
+            subprocess.run([f"hmmsearch -E 0.1 -o {args.out}/test.hmmer {os.path.join(dbdir,'HMM',hmmfile)} {args.out}/test.fa"], shell = True)
             with open(f'{args.out}/test.hmmer', 'r') as hmmdle:
                 for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
                     fam = record.id.split('_')[1]
@@ -198,8 +223,7 @@ def main():
     else:
         msg('Thanks you, come again.')
 
-        
-
+    
 
 # Functions -----------------------------------------------------------------
 def donut_graph():
@@ -329,6 +353,28 @@ def msg(text):
     line = f"[{t}] {text}"
     if not args.quiet:
         print(line, file = sys.stderr)
+
+
+
+def translate_seq(seq):
+    """
+    """
+    seqlist = []
+    # frame 1
+    seqlist.append(translate(seq))
+    # frame 2
+    seqlist.append(translate(seq[1:]))
+    # frame 3
+    seqlist.append(translate(seq[2:]))
+    # frame 4
+    seqlist.append(translate(reverse_complement(seq)))
+    # frame 5
+    seqlist.append(translate(reverse_complement(seq)[1:]))
+    # frame 6
+    seqlist.append(translate(reverse_complement(seq)[2:]))
+
+    return seqlist
+
 
 
 def exception_handler(exception_type, exception, traceback, debug_hook = sys.excepthook):
