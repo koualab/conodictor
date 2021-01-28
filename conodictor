@@ -2,14 +2,16 @@
 
 import argparse
 from Bio import SearchIO
-from Bio import BiopythonWarning
-import warnings
 from Bio.Seq import reverse_complement, translate
-from collections import Counter
+from collections import Counter, defaultdict
+import csv
+from datetime import datetime
 from distutils.spawn import find_executable
+from functools import reduce
 import gzip
 from heapq import nsmallest
 from matplotlib import pyplot as plt
+from operator import mul
 import os
 import pandas as pd
 import pathlib
@@ -19,7 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+import warnings
 
 AUTHOR  = 'Anicet Ebou <anicet.ebou@gmail.com>'
 URL     = 'https://github.com/koualab/conodictor.git'
@@ -110,19 +112,21 @@ def main():
         raise ValueError('hmmsearch installed is below 3.0 version, please upgrade.')
 
     else:
-        raise ValueError('Cannot parse HMMER version. Please check it is correctly installed')
+        raise ValueError("Cannot parse HMMER version. Please check it's correctly installed")
 
     
-    # Read sequence file ----------------------------------------------------
-    
+    # Get sequence file -----------------------------------------------------
+    # Building fasta file index
     infa = pyfastx.Fasta(args.seqs)
-
+    
+    # Test if file is gziped
     if infa.is_gzip:
         gzip = 'gzip compressed'
     else:
         gzip = 'not gzip compressed'
     msg(f'Your file is {gzip}')
-
+    
+    # Test if alphabet is DNA, RNA or proteins
     if infa.type == 'DNA':
         msg(f'You provided DNA fasta file')
         msg(f'Translating input sequences')
@@ -139,75 +143,79 @@ def main():
         msg(f'You provided protein fasta file')
     else:
         msg(f'Your file is not a DNA or protein file, please provide a DNA or protein fasta file')
-        sys.exit(0)
+        sys.exit(1)
 
-    
-    msg('Creating index of your fasta file')
-    infile = pyfastx.Fasta(f"{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa")
+    # Reading proteins fasta file
+    msg('Creating index of your fasta proteins file')
+    if infa.type == 'DNA':
+        infile = pyfastx.Fasta(f"{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa")
+    else:
+        infile = pyfastx.Fasta(args.seqs)
+
     seqids = infile.keys()
     msg('Done creating fasta index')
 
 
     # Get sequence keys
-    msg('Launching HMM and PSSM prediction')
+    msg('Launching HMM prediction')
+    
+    # HMMs-------------------------------------------------------------------
+    msg(f'Using hmmsearch {hmmsearch_version}')
+    subprocess.run([f"hmmsearch -E 0.1 --noali -o {args.out}/out.hmmer {os.path.join(dbdir,'conodictor.hmm')} {args.seqs}"], shell = True)
+    
+    hmmdict = defaultdict(lambda: defaultdict(list))
 
-    # Preparing output file
+    with open(f'{args.out}/out.hmmer') as hmmfile:
+        for record in SearchIO.parse(hmmfile, 'hmmer3-text'):
+            hits = record.hits
+            for hit in hits:
+                hmmdict[hit.id][record.id.split('_')[1]].append(hit.evalue)
+
+    hmmscore = hmm_threshold(hmmdict)
+    hmmfam = get_hmm_fam(hmmscore)
+    
+    msg('Done with HMM prediction')
+    
+    # PSSMs------------------------------------------------------------------
+    msg('Launching PSSM prediction')
+    msg(f'Using pfsearch {pfsearch_match} and ps_scan.pl {psscan_match}')
+    subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join(dbdir, 'conodictor.pssm')} {args.seqs} > {args.out}/out.pssm"], shell = True)
+    
+    pssmdict = defaultdict(list)
+
+    with open(f'{args.out}/out.pssm') as pssmfile:
+        rd = csv.reader(pssmfile, delimiter = "\t")
+        for row in rd:
+            pssmdict[row[0]].append(row[3].split('_')[1])
+    
+    pssmfam = get_pssm_fam(pssmdict)
+    
+    msg('Done with PSSM predictions')
+
+    # Writing output---------------------------------------------------------
+    msg('Writing output')
+    finalfam = defaultdict(list)
+    for sid in seqids:
+        if sid in hmmfam and sid in pssmfam:
+            finalfam[sid].extend([hmmfam[sid], pssmfam[sid], conodictor_class(hmmfam[sid], pssmfam[sid])])
+        elif sid in hmmfam and sid not in pssmfam:
+            finalfam[sid].extend([hmmfam[sid], 'UNKNOWN', conodictor_class(hmmfam[sid], 'UNKOWN')])
+        elif sid in pssmfam and sid not in hmmfam:
+            finalfam[sid].extend(['UNKNOWN', pssmfam[sid], conodictor_class('UNKOWN', pssmfam[sid])])
+        else:
+            finalfam[sid].extend(['UNKOWN', 'UNKOWN', conodictor_class('UNKOWN', 'UNKNOWN')])
+    
     outfile = open(f'{args.out}/summary.txt', 'a')
     outfile.write('sequence\thmm_pred\tpssm_pred\tdefinitive_pred\n')
- 
-    for seq in seqids:
-        # Write seq on file
-        with open(f'{args.out}/test.fa', 'w') as f:
-            f.write(f">{seq}\n{infa[seq]}")
-        f.close()
-
-        # HMMs ---------------------------------------------------------------
-        hmmclass = {}
-        score = {}
-        for hmmfile in os.listdir('db/HMM'):
-            subprocess.run([f"hmmsearch -E 0.1 -o {args.out}/test.hmmer {os.path.join(dbdir,'HMM',hmmfile)} {args.out}/test.fa"], shell = True)
-            with open(f'{args.out}/test.hmmer', 'r') as hmmdle:
-                for record in SearchIO.parse(hmmdle, 'hmmer3-text'):
-                    fam = record.id.split('_')[1]
-                    hits = record.hits
-                    if hits:
-                        for hit in hits:
-                            score[record.id] = hit.evalue
-                    else:
-                        score[record.id] = 1
-                
-            hmmdle.close()
-            
-            # Calculate probablilty for HMMs
-            phmm = 1
-            for val in score.values():
-                phmm *= val
-
-            hmmclass[fam] = phmm
-        
-        
-        # PSSMs -------------------------------------------------------------
-        nm_pssm = []
-        for pssmfile in os.listdir('db/PSSM'):
-            subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join(dbdir, 'PSSM', pssmfile)} {args.out}/test.fa > {args.out}/test.pssm"], shell = True)
-            if os.stat(f'{args.out}/test.pssm').st_size != 0:
-                pssm_res = pd.read_table(f'{args.out}/test.pssm')
-
-                # Extracting list of matched profiles
-                matched_pssm = pssm_res[pssm_res.columns[3]].tolist()
-                nm_pssm = [x.split('_')[1] for x in matched_pssm]
-            else:
-                pass
-        
-        outfile.write(f"{seq}\t{get_hmm_class(hmmclass)}\t{get_pssm_class(nm_pssm)}\t{give_conodictor_class(get_hmm_class(hmmclass), get_pssm_class(nm_pssm))}\n")
-        
-    msg('Done with HMM and PSSM prediction.')
+    for k, v in finalfam.items():
+        outfile.write(f'{k}\t{v[0]}\t{v[1]}\t{v[2]}\n')
     outfile.close()
 
+    msg('Done with writing output.')
+
     # Finishing -------------------------------------------------------------
-    os.remove(f'{args.out}/test.hmmer')
-    os.remove(f'{args.out}/test.pssm')
-    os.remove(f'{args.out}/test.fa')
+    os.remove(f'{args.out}/out.hmmer')
+    os.remove(f'{args.out}/out.pssm')
     
     msg('Classification finished succesfuly.')
     msg('Creating donut plot')
@@ -228,7 +236,7 @@ def main():
 # Functions -----------------------------------------------------------------
 def donut_graph():
     """
-    Make a donut graph from output file.
+    Make a donut graph from stats of predicted sequences.
     """
     data = pd.read_table(f'{args.out}/summary.txt')
     plot_data = data[data.columns[3]].tolist()
@@ -248,10 +256,25 @@ def donut_graph():
     plt.savefig(f'{args.out}/superfamilies_distribution.png', dpi = 300)
 
 
-def give_conodictor_class(hmmclass, pssmclass):
+def conodictor_class(hmmclass, pssmclass):
     """
-    Gives definitive classification by combining HMM and PSSM
-    classification.
+    Gives definitive classification by combining HMM and PSSM classification.
+
+    Arguments:
+     - hmmclass  - HMM predicted family, required (string)
+     - pssmclass - PSSM predicted family, required (string)
+    
+    >>> conodictor_class('A', 'M')
+    CONFLICT A and M
+
+    >>> conodictor_class('A', 'A')
+    A
+
+    >>> conodictor_class('A', 'UNKNOWN')
+    A
+
+    >>> conodictor_class('R', 'CONFLICT A and R')
+    R
     """
     deffam = None
     if hmmclass == pssmclass:
@@ -276,28 +299,78 @@ def give_conodictor_class(hmmclass, pssmclass):
     return deffam
 
 
-def get_pssm_class(mylist):
+def get_pssm_fam(mdict):
     """
-    Takes a list: [A, A, B, D] and return 
-    the final classification
-    """
-    x = Counter(mylist)
-    # Take the top 2 item with highest count in list
-    possible_fam = x.most_common(2)
+    Give predicted family by PSSM.
+
+    Argument:
+     - mdict - Dictionnary, required (dict)
     
-    if len(possible_fam) == 1:
-        fam = possible_fam[0][0]
-    elif len(possible_fam) > 1:
-        if possible_fam[0][1] == possible_fam[1][1]:
-            fam = f'CONFLICT {possible_fam[0][0]} and {possible_fam[1][0]}'
-        elif possible_fam[0][1] > possible_fam[1][1]:
+    Return the family with the highest number of occurence in PSSM profile match
+    recorded as list for each sequence id.
+
+    >>> my_dict = {ID1: ['A', 'A', 'B', 'M'], ID2: ['M', 'P', 'O1', 'O1']}
+    >>> get_pssm_fam(my_dict)
+    {ID1: 'A', ID2: 'O1'}
+    """
+    fam = ''
+    pssmfam = {}
+    for key in mdict.keys():
+        x = Counter(mdict[key])
+        # Take the top 2 item with highest count in list
+        possible_fam = x.most_common(2)
+    
+        if len(possible_fam) == 1:
             fam = possible_fam[0][0]
-        else:
-            fam = possible_fam[1][0]
-    elif len(possible_fam) == 0:
-        fam = 'UNKNOWN'
+        elif len(possible_fam) > 1:
+            if possible_fam[0][1] == possible_fam[1][1]:
+                fam = f'CONFLICT {possible_fam[0][0]} and {possible_fam[1][0]}'
+            elif possible_fam[0][1] > possible_fam[1][1]:
+                fam = possible_fam[0][0]
+            else:
+                fam = possible_fam[1][0]
+        
+        pssmfam[key] = fam
+        
+    return pssmfam
+
+def hmm_threshold(mdict):
+    """
+    Calculate evalue by family for each sequence.
+
+    Argument:
+     - mdict: Dictionnary, required (dict)
     
-    return fam
+    Return a dict with the evalue for each family.
+    """
+    score = defaultdict(dict)
+    for key in mdict.keys():
+        for k, v in mdict[key].items():
+            score[key][k] = reduce(mul, v, 1)
+            
+    return score
+    
+def get_hmm_fam(mdict):
+    """
+    """
+    conofam = ''
+    seqfam = {}
+    for key in mdict.keys():
+        two_smallest = nsmallest(2, mdict[key].values())
+        
+        if len(two_smallest) == 1:
+            conofam = next(iter(mdict[key]))
+        elif two_smallest[0]*100 != two_smallest[1]:
+            conofam = list(mdict[key].keys())[list(mdict[key].values()).index(two_smallest[0])]
+        elif two_smallest[0]*100 == two_smallest[1]:
+            fam1 = list(mdict[key].keys())[list(mdict[key].values()).index(two_smallest[0])]
+            fam2 = list(mdict[key].keys())[list(mdict[key].values()).index(two_smallest[1])]
+            conofam = f'CONFLICT {fam1} and {fam2}'
+        
+        seqfam[key] = conofam
+    
+    return seqfam
+
 
 
 def get_hmm_class(mydict):
