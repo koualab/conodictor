@@ -11,6 +11,7 @@ from functools import reduce
 import gzip
 from heapq import nsmallest
 from matplotlib import pyplot as plt
+import numpy as np
 from operator import mul
 import os
 import pandas as pd
@@ -127,7 +128,7 @@ def main():
     msg(f'Your file is {gzip}')
     
     # Test if alphabet is DNA, RNA or proteins
-    if infa.type == 'DNA':
+    if test_sequence(infa[1].seq) == 'DNA':
         msg(f'You provided DNA fasta file')
         msg(f'Translating input sequences')
         with open(f'{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa', 'w') as protfile:
@@ -139,7 +140,7 @@ def main():
                         seq_letters = [frame[i:i+60] for i in range(0, len(frame), 60)]
                         nl = '\n'
                         protfile.write(f">{sequence.name}_frame={idx + 1}\n{nl.join(map(str,seq_letters))}\n")
-    elif infa.type == 'protein':
+    elif test_sequence(infa[1].seq) == 'protein':
         msg(f'You provided protein fasta file')
     else:
         msg(f'Your file is not a DNA or protein file, please provide a DNA or protein fasta file')
@@ -147,7 +148,7 @@ def main():
 
     # Reading proteins fasta file
     msg('Creating index of your fasta proteins file')
-    if infa.type == 'DNA':
+    if test_sequence(infa[1].seq) == 'DNA':
         infile = pyfastx.Fasta(f"{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa")
     else:
         infile = pyfastx.Fasta(args.seqs)
@@ -178,7 +179,7 @@ def main():
     
     # PSSMs------------------------------------------------------------------
     msg('Launching PSSM prediction')
-    msg(f'Using pfsearch {pfsearch_match} and ps_scan.pl {psscan_match}')
+    msg(f'Using pfsearch {pfsearch_match[0]} and ps_scan.pl {psscan_match[0]}')
     subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join(dbdir, 'conodictor.pssm')} {args.seqs} > {args.out}/out.pssm"], shell = True)
     
     pssmdict = defaultdict(list)
@@ -217,7 +218,7 @@ def main():
     os.remove(f'{args.out}/out.hmmer')
     os.remove(f'{args.out}/out.pssm')
     
-    msg('Classification finished succesfuly.')
+    msg('Classification finished succesfully.')
     msg('Creating donut plot')
     donut_graph()
     msg('Done creating donut plot')
@@ -241,18 +242,28 @@ def donut_graph():
     data = pd.read_table(f'{args.out}/summary.txt')
     plot_data = data[data.columns[3]].tolist()
     data_count = Counter(plot_data)
-    labels = []
-    for k, v in data_count.items():
-        labels.append(f'{k}: {v}')
-    values = [x for x in data_count.values()]
-
+    labels = [f'{k1}: {v1}' for k1, v1 in data_count.items() if not k1.startswith('CONFLICT')]
+    values = [x for k2, x in data_count.items() if not k2.startswith('CONFLICT')]
+    
+    
     # White circle
-    blank_circle = plt.Circle((0, 0), 0.5, color = 'white')
+    fig, ax = plt.subplots(figsize=(8, 5), subplot_kw = dict(aspect = "equal"))
+    wedges, texts = ax.pie(np.array(values).ravel(), wedgeprops = dict(width = 0.5), startangle = -40)
+    
+    bbox_props = dict(boxstyle = "square,pad = 0.3", fc = "w", ec = "k", lw = 0.72)
+    kw = dict(arrowprops = dict(arrowstyle = "-"), bbox = bbox_props, zorder = 0, va = "center")
+    
+    for i, p in enumerate(wedges):
+        ang = (p.theta2 - p.theta1)/2. + p.theta1
+        y = np.sin(np.deg2rad(ang))
+        x = np.cos(np.deg2rad(ang))
+        horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
+        connectionstyle = f"angle,angleA=0,angleB={ang}"
+        kw["arrowprops"].update({"connectionstyle": connectionstyle})
+        ax.annotate(labels[i], xy = (x, y), xytext = (1.35 * np.sign(x), 1.4 * y), horizontalalignment = horizontalalignment, **kw)
+        
 
-    # Give color names
-    plt.pie(values, labels = labels, wedgeprops = {'linewidth': 3, 'edgecolor': 'white'})
-    p = plt.gcf()
-    p.gca().add_artist(blank_circle)
+    ax.set_title("ConoDictor Predictions")
     plt.savefig(f'{args.out}/superfamilies_distribution.png', dpi = 300)
 
 
@@ -298,6 +309,20 @@ def conodictor_class(hmmclass, pssmclass):
     
     return deffam
 
+
+def test_sequence(s):
+    dna = 'ATCG'
+    prot = 'ACDEFGHIKLMNPQRSTVWYXBZJ'
+    stype = ''
+
+    if all(i in dna for i in s):
+        stype = 'DNA'
+    elif all(i in prot for i in s):
+        stype = 'protein'
+    else:
+        stype = 'unknown'
+    
+    return stype
 
 def get_pssm_fam(mdict):
     """
