@@ -282,9 +282,9 @@ def donut_graph():
     values = [x for k2, x in dtc.items() if not k2.startswith('CONFLICT')]
     
     # White circle
-    fig, ax = plt.subplots(figsize=(8, 5), 
+    _, ax = plt.subplots(figsize=(8, 5), 
                            subplot_kw = dict(aspect = "equal"))
-    wedges, texts = ax.pie(np.array(values).ravel(),
+    wedges, _ = ax.pie(np.array(values).ravel(),
                            wedgeprops = dict(width = 0.5), startangle = -40)
     
     bbox_props = dict(boxstyle = "square,pad = 0.3",
