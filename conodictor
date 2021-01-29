@@ -28,38 +28,38 @@ AUTHOR  = 'Anicet Ebou <anicet.ebou@gmail.com>'
 URL     = 'https://github.com/koualab/conodictor.git'
 VERSION = '2.0'
 
-# Define start time
+# Define start time----------------------------------------------------------
 startime = datetime.now()
 helptime = datetime.now().strftime("%a, %d %b %Y %H:%M:%S")
 
-# Define command-line arguments
+# Define command-line arguments----------------------------------------------
 parser = argparse.ArgumentParser(
     prog            = 'conodictor',
     formatter_class = argparse.RawDescriptionHelpFormatter,
     usage           = 'conodictor [options] seqs.fa',
-    description     = 'ConoDictor predict conopeptide superfamily using PSSMs and HMMs.',
-    epilog          = f"Version:   2.0\nLicence:   GPL-3\nHomepage:  https://github.com/koualab/conodictor\nAuthor:    Anicet Ebou <anicet.ebou@gmail.com>\nLast Run:  {helptime}.")
+    epilog          = f"Version:   {VERSION}\nLicence:   GPL-3\nHomepage:  {URL}\nAuthor:    {AUTHOR}\nLast Run:  {helptime}.")
 
-parser.add_argument('seqs',       help   = 'Specify input sequences fasta file')
+parser.add_argument('seqs', help   = 'Specify input sequences fasta file')
 out_group = parser.add_mutually_exclusive_group()
-out_group.add_argument('--out',   type   = pathlib.Path, default = 'conoDictor', help = 'Specify Output directory')
-out_group.add_argument('--force', action = 'store_true', help = 'Force re-use output directory')
-parser.add_argument('--quiet',    action = 'store_true', help = 'Decrease program verbosity')
-parser.add_argument('--debug',    action = 'store_true', help = 'Activate debug mode')
-parser.add_argument('--license',  action = 'store_true', help = 'Show license information')
-
+out_group.add_argument('--out',      type   = pathlib.Path, 
+                       default = 'conoDictor',
+                       help = 'Specify Output directory')
+out_group.add_argument('--force',    action = 'store_true',
+                       help = 'Force re-use output directory')
+parser.add_argument(   '--quiet',    action = 'store_true',
+                       help = 'Decrease program verbosity')
+parser.add_argument(   '--debug',    action = 'store_true',
+                       help = 'Activate debug mode')
 args = parser.parse_args()
 
 def main():
-
-    # handling db directory path specification
+    # Handling db directory path specification-------------------------------
     try:
         dbdir = os.environ['CONODB']
     except KeyError:
         msg('Databases files needed for classification not found in $PATH. Please set CONODB environment variable to the path where the HMMs and PSSMs are stored.')
         sys.exit(1)
     
-
     # Handling output directory creation-------------------------------------
     if os.path.isdir(args.out):
         if args.force:
@@ -67,8 +67,7 @@ def main():
             shutil.rmtree(args.out)
             os.mkdir(args.out)
         else:
-            raise NameError(
-        'Default folder (conoDictor) already exist!. Please change it using --out option or use --force to reuse it.')
+            raise NameError('Default folder (conoDictor) already exist!. Please change it using --out option or use --force to reuse it.')
     else:
         msg(f'Creating output directory {args.out}')
         os.mkdir(args.out)
@@ -79,12 +78,12 @@ def main():
         user = 'not telling me who you are'
 
     # Start program ---------------------------------------------------------
-    msg('-----------------------------------------')
+    msg('-----------------------------------------------')
     msg('conodictor Copyright (C) 2021 Anicet Ebou')
     msg('This program comes with ABSOLUTELY NO WARRANTY;')
-    msg('This is free software, and you are welcome to redistribute it')
-    msg('under certain conditions; type conodictor --license for details')
-    msg('------------------------------------------')
+    msg('This is free software, and you are welcome to ')
+    msg('redistribute it under certain conditions.')
+    msg('-----------------------------------------------')
     msg(f'This is conodictor {VERSION}')
     msg(f'Written by {AUTHOR}')
     msg(f'Available at {URL}')
@@ -104,76 +103,98 @@ def main():
 
     # Getting version of tools ----------------------------------------------
     sub_hmmsearch = subprocess.run(['hmmsearch', '-h'], capture_output=True)
-    hmmsearch_match = re.findall(r'# HMMER\s+(\d+\.\d+)', sub_hmmsearch.stdout.decode('utf-8'))
+    hmmsearch_match = re.findall(r'# HMMER\s+(\d+\.\d+)',
+                                 sub_hmmsearch.stdout.decode('utf-8'))
 
     sub_pfsearch = subprocess.run(['pfsearch', '-h'], capture_output=True)
-    pfsearch_match = re.findall(r"pfsearch\s+(\d+\.\d+ revision\s+\d\.\w)", sub_pfsearch.stderr.decode('utf-8'))
+    pfsearch_match = re.findall(r"pfsearch\s+(\d+\.\d+ revision\s+\d\.\w)",
+                                 sub_pfsearch.stderr.decode('utf-8'))
     
     sub_psscan = subprocess.run(['ps_scan.pl', '-h'], capture_output=True)
-    psscan_match = re.findall(r'ps_scan version\s+(\d+\.\d+)', sub_psscan.stdout.decode('utf-8'))
+    psscan_match = re.findall(r'ps_scan version\s+(\d+\.\d+)',
+                                 sub_psscan.stdout.decode('utf-8'))
 
 
-    # Check that version ----------------------------------------------------
+    # Check that version-----------------------------------------------------
     if hmmsearch_match[0] and float(hmmsearch_match[0]) > 3:
         hmmsearch_version = hmmsearch_match[0]
     elif hmmsearch_match[0] and float(hmmsearch_match[0]) < 3:
-        raise ValueError('hmmsearch installed is below 3.0 version, please upgrade.')
+        raise ValueError("hmmsearch installed is below 3.0 version, please upgrade at https://hmmer3.org.")
 
     else:
-        raise ValueError("Cannot parse HMMER version. Please check it's correctly installed")
+        raise ValueError("Cannot parse HMMER version. Please check it's correctly installed. See https://hmmer3.org.")
 
     
-    # Get sequence file -----------------------------------------------------
-    # Building fasta file index
+    # Input sequence file manipulation---------------------------------------
+    
+    ## Open fasta file (build file index)
     infa = pyfastx.Fasta(args.seqs)
     
-    # Test if file is gziped
-    if infa.is_gzip:
-        gzip = 'gzip compressed'
+    ## Test if file type is accepted
+    if test_sequence(infa[1].seq) in ['DNA', 'protein']:
+        pass
     else:
-        gzip = 'not gzip compressed'
-    msg(f'Your file is {gzip}')
-    
-    # Test if alphabet is DNA, RNA or proteins
-    if test_sequence(infa[1].seq) == 'DNA':
-        msg(f'You provided DNA fasta file')
-        msg(f'Translating input sequences')
-        with open(f'{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa', 'w') as protfile:
-            for sequence in infa:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    protseq = translate_seq(sequence.seq)
-                    for idx, frame in enumerate(protseq):
-                        seq_letters = [frame[i:i+60] for i in range(0, len(frame), 60)]
-                        nl = '\n'
-                        protfile.write(f">{sequence.name}_frame={idx + 1}\n{nl.join(map(str,seq_letters))}\n")
-    elif test_sequence(infa[1].seq) == 'protein':
-        msg(f'You provided protein fasta file')
-    else:
-        msg(f'Your file is not a DNA or protein file, please provide a DNA or protein fasta file')
+        msg('Your file is not a DNA or protein file, please provide a DNA or protein fasta file')
         sys.exit(1)
 
-    # Reading proteins fasta file
-    msg('Creating index of your fasta proteins file')
-    if test_sequence(infa[1].seq) == 'DNA':
-        infile = pyfastx.Fasta(f"{args.out}/{pathlib.Path(args.seqs).stem}_proteins.fa")
-    else:
-        infile = pyfastx.Fasta(args.seqs)
+    ## Test if file is gziped and translate
+    if infa.is_gzip:
+        ### Decompress file
+        msg('Your file is gzip compressed. Decompressing it.')
+        with gzip.open(args.seqs, 'r') as seqh:
+            with open(
+                pathlib.Path(args.out, pathlib.Path(args.seqs).stem), 'wb'
+                ) as seqo:
+                shutil.copyfileobj(seqh, seqo)
+            seqo.close()
+        msg('Decompression done.')
+        
+        ### Read decompressed file
+        ingzfa = pyfastx.Fasta(
+            str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem))
+        )
 
+        ### Test if alphabet is DNA, or protein and translate or not
+        if test_sequence(ingzfa[1].seq) == 'DNA':
+            msg(f'You provided DNA fasta file')
+            msg(f'Translating input sequences')
+            do_translation(
+                pathlib.Path(args.out, pathlib.Path(args.seqs).stem), 
+                pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
+            )
+            inpath = pathlib.Path(args.out, 
+                        f'{pathlib.Path(args.seqs).stem}_proteins.fa')
+        elif test_sequence(ingzfa[1].seq) == 'protein':
+            msg(f'You provided protein fasta file')
+            inpath = pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
+            
+    elif not infa.is_gzip:
+        msg('Your file is not gzip compressed')
+        if test_sequence(infa[1].seq) == 'DNA':
+            msg(f'You provided DNA fasta file')
+            msg(f'Translating input sequences')
+            do_translation(
+                pathlib.Path(args.out, os.path.basename(args.seqs)), 
+                pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
+            )
+            inpath = pathlib.Path(args.out, 
+                         f'{pathlib.Path(args.seqs).stem}_proteins.fa')
+        elif test_sequence(infa[1].seq) == 'protein':
+            msg(f'You provided protein fasta file')
+            inpath = args.seqs
+
+    ## Get sequence keys
+    infile = pyfastx.Fasta(str(inpath))
     seqids = infile.keys()
-    msg('Done creating fasta index')
-
-
-    # Get sequence keys
-    msg('Launching HMM prediction')
     
     # HMMs-------------------------------------------------------------------
+    msg('Launching HMM prediction')
     msg(f'Using hmmsearch {hmmsearch_version}')
-    subprocess.run([f"hmmsearch -E 0.1 --noali -o {args.out}/out.hmmer {os.path.join(dbdir,'conodictor.hmm')} {args.seqs}"], shell = True)
+    subprocess.run(['hmmsearch', '-E', '0.1', '--noali', '-o', pathlib.Path(args.out, 'out.hmmer'), pathlib.Path(dbdir,'conodictor.hmm'), inpath])
     
     hmmdict = defaultdict(lambda: defaultdict(list))
 
-    with open(f'{args.out}/out.hmmer') as hmmfile:
+    with open(pathlib.Path(args.out, 'out.hmmer')) as hmmfile:
         for record in SearchIO.parse(hmmfile, 'hmmer3-text'):
             hits = record.hits
             for hit in hits:
@@ -187,11 +208,14 @@ def main():
     # PSSMs------------------------------------------------------------------
     msg('Launching PSSM prediction')
     msg(f'Using pfsearch {pfsearch_match[0]} and ps_scan.pl {psscan_match[0]}')
-    subprocess.run([f"ps_scan.pl -w pfsearch -o pff -d {os.path.join(dbdir, 'conodictor.pssm')} {args.seqs} > {args.out}/out.pssm"], shell = True)
+    pssm_run = subprocess.run(['ps_scan.pl', '-w', 'pfsearch', '-o', 'pff', '-d' ,pathlib.Path(dbdir, 'conodictor.pssm'), inpath], capture_output = True)
+    
+    with open(pathlib.Path(args.out, 'out.pssm'), 'w') as po:
+        po.write(pssm_run.stdout.decode("utf-8"))
     
     pssmdict = defaultdict(list)
 
-    with open(f'{args.out}/out.pssm') as pssmfile:
+    with open(pathlib.Path(args.out, 'out.pssm')) as pssmfile:
         rd = csv.reader(pssmfile, delimiter = "\t")
         for row in rd:
             pssmdict[row[0]].append(row[3].split('_')[1])
@@ -205,31 +229,36 @@ def main():
     finalfam = defaultdict(list)
     for sid in seqids:
         if sid in hmmfam and sid in pssmfam:
-            finalfam[sid].extend([hmmfam[sid], pssmfam[sid], conodictor_class(hmmfam[sid], pssmfam[sid])])
+            finalfam[sid].extend(
+                [hmmfam[sid],pssmfam[sid],cdpred(hmmfam[sid], pssmfam[sid])]
+            )
         elif sid in hmmfam and sid not in pssmfam:
-            finalfam[sid].extend([hmmfam[sid], 'UNKNOWN', conodictor_class(hmmfam[sid], 'UNKOWN')])
+            finalfam[sid].extend(
+                [hmmfam[sid], 'UNKNOWN', cdpred(hmmfam[sid], 'UNKOWN')]
+            )
         elif sid in pssmfam and sid not in hmmfam:
-            finalfam[sid].extend(['UNKNOWN', pssmfam[sid], conodictor_class('UNKOWN', pssmfam[sid])])
+            finalfam[sid].extend(
+                ['UNKNOWN', pssmfam[sid], cdpred('UNKOWN', pssmfam[sid])]
+            )
         else:
-            finalfam[sid].extend(['UNKOWN', 'UNKOWN', conodictor_class('UNKOWN', 'UNKNOWN')])
+            finalfam[sid].extend(
+                ['UNKOWN', 'UNKOWN', cdpred('UNKOWN', 'UNKNOWN')]
+            )
     
-    outfile = open(f'{args.out}/summary.txt', 'a')
+    outfile = open(pathlib.Path(args.out, 'summary.txt'), 'a')
     outfile.write('sequence\thmm_pred\tpssm_pred\tdefinitive_pred\n')
     for k, v in finalfam.items():
         outfile.write(f'{k}\t{v[0]}\t{v[1]}\t{v[2]}\n')
     outfile.close()
-
     msg('Done with writing output.')
 
     # Finishing -------------------------------------------------------------
-    os.remove(f'{args.out}/out.hmmer')
-    os.remove(f'{args.out}/out.pssm')
-    
+    os.remove(pathlib.Path(args.out, 'out.hmmer'))
+    os.remove(pathlib.Path(args.out, 'out.pssm'))
     msg('Classification finished succesfully.')
     msg('Creating donut plot')
     donut_graph()
     msg('Done creating donut plot')
-
     msg(f'Check {args.out} folder for results')
     endtime = datetime.now()
     walltime = endtime - startime
@@ -246,35 +275,41 @@ def donut_graph():
     """
     Make a donut graph from stats of predicted sequences.
     """
-    data = pd.read_table(f'{args.out}/summary.txt')
+    data = pd.read_table(pathlib.Path(args.out, 'summary.txt'))
     plot_data = data[data.columns[3]].tolist()
-    data_count = Counter(plot_data)
-    labels = [f'{k1}: {v1}' for k1, v1 in data_count.items() if not k1.startswith('CONFLICT')]
-    values = [x for k2, x in data_count.items() if not k2.startswith('CONFLICT')]
-    
+    dtc = Counter(plot_data)
+    labels = [f'{k1}: {v1}' for k1, v1 in dtc.items() if not k1.startswith('CONFLICT')]
+    values = [x for k2, x in dtc.items() if not k2.startswith('CONFLICT')]
     
     # White circle
-    fig, ax = plt.subplots(figsize=(8, 5), subplot_kw = dict(aspect = "equal"))
-    wedges, texts = ax.pie(np.array(values).ravel(), wedgeprops = dict(width = 0.5), startangle = -40)
+    fig, ax = plt.subplots(figsize=(8, 5), 
+                           subplot_kw = dict(aspect = "equal"))
+    wedges, texts = ax.pie(np.array(values).ravel(),
+                           wedgeprops = dict(width = 0.5), startangle = -40)
     
-    bbox_props = dict(boxstyle = "square,pad = 0.3", fc = "w", ec = "k", lw = 0.72)
-    kw = dict(arrowprops = dict(arrowstyle = "-"), bbox = bbox_props, zorder = 0, va = "center")
+    bbox_props = dict(boxstyle = "square,pad = 0.3",
+                      fc = "w", ec = "k", lw = 0.72)
+    kw = dict(arrowprops = dict(arrowstyle = "-"),
+              bbox = bbox_props, zorder = 0, va = "center")
     
     for i, p in enumerate(wedges):
         ang = (p.theta2 - p.theta1)/2. + p.theta1
         y = np.sin(np.deg2rad(ang))
         x = np.cos(np.deg2rad(ang))
         horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
-        connectionstyle = f"angle,angleA=0,angleB={ang}"
+        connectionstyle = f'angle, angleA = 0, angleB = {ang}'
         kw["arrowprops"].update({"connectionstyle": connectionstyle})
-        ax.annotate(labels[i], xy = (x, y), xytext = (1.35 * np.sign(x), 1.4 * y), horizontalalignment = horizontalalignment, **kw)
+        ax.annotate(labels[i], xy = (x, y), 
+                    xytext = (1.35 * np.sign(x), 1.4 * y), 
+                    horizontalalignment = horizontalalignment, **kw)
         
 
     ax.set_title("ConoDictor Predictions")
-    plt.savefig(f'{args.out}/superfamilies_distribution.png', dpi = 300)
+    plt.savefig(pathlib.Path(args.out, 'superfamilies_distribution.png'), 
+                dpi = 300)
 
 
-def conodictor_class(hmmclass, pssmclass):
+def cdpred(hmmclass, pssmclass):
     """
     Gives definitive classification by combining HMM and PSSM classification.
 
@@ -282,16 +317,16 @@ def conodictor_class(hmmclass, pssmclass):
      - hmmclass  - HMM predicted family, required (string)
      - pssmclass - PSSM predicted family, required (string)
     
-    >>> conodictor_class('A', 'M')
+    >>> cdpred('A', 'M')
     CONFLICT A and M
 
-    >>> conodictor_class('A', 'A')
+    >>> cdpred('A', 'A')
     A
 
-    >>> conodictor_class('A', 'UNKNOWN')
+    >>> cdpred('A', 'UNKNOWN')
     A
 
-    >>> conodictor_class('R', 'CONFLICT A and R')
+    >>> cdpred('R', 'CONFLICT A and R')
     R
     """
     deffam = None
@@ -331,6 +366,7 @@ def test_sequence(s):
     
     return stype
 
+
 def get_pssm_fam(mdict):
     """
     Give predicted family by PSSM.
@@ -338,8 +374,8 @@ def get_pssm_fam(mdict):
     Argument:
      - mdict - Dictionnary, required (dict)
     
-    Return the family with the highest number of occurence in PSSM profile match
-    recorded as list for each sequence id.
+    Return the family with the highest number of occurence in PSSM profile 
+    match recorded as list for each sequence id.
 
     >>> my_dict = {ID1: ['A', 'A', 'B', 'M'], ID2: ['M', 'P', 'O1', 'O1']}
     >>> get_pssm_fam(my_dict)
@@ -366,6 +402,7 @@ def get_pssm_fam(mdict):
         
     return pssmfam
 
+
 def hmm_threshold(mdict):
     """
     Calculate evalue by family for each sequence.
@@ -381,7 +418,8 @@ def hmm_threshold(mdict):
             score[key][k] = reduce(mul, v, 1)
             
     return score
-    
+
+
 def get_hmm_fam(mdict):
     """
     """
@@ -393,16 +431,21 @@ def get_hmm_fam(mdict):
         if len(two_smallest) == 1:
             conofam = next(iter(mdict[key]))
         elif two_smallest[0]*100 != two_smallest[1]:
-            conofam = list(mdict[key].keys())[list(mdict[key].values()).index(two_smallest[0])]
+            conofam = list(mdict[key].keys())[
+                list(mdict[key].values()).index(two_smallest[0])
+            ]
         elif two_smallest[0]*100 == two_smallest[1]:
-            fam1 = list(mdict[key].keys())[list(mdict[key].values()).index(two_smallest[0])]
-            fam2 = list(mdict[key].keys())[list(mdict[key].values()).index(two_smallest[1])]
+            fam1 = list(mdict[key].keys())[
+                list(mdict[key].values()).index(two_smallest[0])
+            ]
+            fam2 = list(mdict[key].keys())[
+                list(mdict[key].values()).index(two_smallest[1])
+            ]
             conofam = f'CONFLICT {fam1} and {fam2}'
         
         seqfam[key] = conofam
     
     return seqfam
-
 
 
 def get_hmm_class(mydict):
@@ -427,13 +470,17 @@ def get_hmm_class(mydict):
         if two_smallest[0] == 0 and two_smallest[1] == 0:
             conofam = 'UNKNOWN'
         elif two_smallest[0]*100 == two_smallest[1]:
-            value1 = list(mydict.keys())[list(mydict.values()).index(two_smallest[0])]
-            value2 = list(mydict.keys())[list(mydict.values()).index(two_smallest[1])]
+            value1 = list(mydict.keys())[
+                list(mydict.values()).index(two_smallest[0])
+            ]
+            value2 = list(mydict.keys())[
+                list(mydict.values()).index(two_smallest[1])
+            ]
             conofam = f'CONFLICT {value1} and {value2}'
         else:
             conofam = list(mydict.keys())[
                 list(mydict.values()).index(two_smallest[0])
-                ]
+            ]
     
     return conofam
 
@@ -455,7 +502,7 @@ def msg(text):
     Produce nice message and info output on terminal
     """
     t = datetime.now().strftime("%H:%M:%S")
-    line = f"[{t}] {text}"
+    line = f'[{t}] {text}'
     if not args.quiet:
         print(line, file = sys.stderr)
 
@@ -481,11 +528,28 @@ def translate_seq(seq):
     return seqlist
 
 
+def do_translation(infile, outfile, sw = 60):
+    
+    seqin = pyfastx.Fasta(infile)
+    with open(pathlib.Path(f'{outfile}_proteins.fa'), 'w') as protfile:
+        for sequence in seqin:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                protseq = translate_seq(sequence.seq)
+                for idx, frame in enumerate(protseq):
+                    seq_letters = [
+                        frame[i:i+sw] for i in range(0, len(frame), sw)
+                    ]
+                    nl = '\n'
+                    protfile.write(f">{sequence.name}_frame={idx + 1}\n{nl.join(map(str, seq_letters))}\n")
 
-def exception_handler(exception_type, exception, traceback, debug_hook = sys.excepthook):
+
+def exception_handler(
+    exception_type, exception, traceback, debug_hook = sys.excepthook):
     """
-    Remove default debug info and traceback from python output on command line.
-    Use program --debug option to re-enable default behaviour. 
+    Remove default debug info and traceback from python output on 
+    command line. Use program --debug option to re-enable default
+    behaviour. 
     """
     if args.debug:
         debug_hook(exception_type, exception, traceback)
