@@ -1,5 +1,8 @@
 .vscode/*
 conoDictor/*
-test/test_set*
+test/test_set.fa.gz
+test/test_set.fa
+test/test_set.fa.fxi
+test/test.fas.gz.fxi
 conoenv/*
 test/lytoglyphus*
