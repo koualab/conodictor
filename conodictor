@@ -422,6 +422,7 @@ def hmm_threshold(mdict):
 
 def get_hmm_fam(mdict):
     """
+    Get sequence family from hmm dictionnary.
     """
     conofam = ''
     seqfam = {}
