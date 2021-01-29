@@ -10,10 +10,7 @@ hidden Markov models and position-specific scoring matrix.
 
 ## Installation
 
-### Bioconda
-
-
-### nix-like operating systems 
+### Unix-like operating systems 
 
 ```
 git clone https://github.com/koualab/conodictor.git conodictor
@@ -75,12 +72,9 @@ Standard meta-options:
 
 ```
   
-  
 ## Bugs
 
-Submit problems or requests to the [Issue Tracker](https://github.com/conodictor/issues).
-
-  
+Submit problems or requests to the [Issue Tracker](https://github.com/koualab/conodictor/issues).
 
 
 ## Dependencies
@@ -88,19 +82,19 @@ Submit problems or requests to the [Issue Tracker](https://github.com/conodictor
 ### Mandatory
 
 * **HMMER 3**  
-  Used for HMM profile prediction 
+  Used for HMM profile prediction.   
   *Eddy SR, Accelerated Profile HMM Searches. PLOS Computational Biology 2011, 10.1371/journal.pcbi.1002195*
 
 * **Pftools**  
-  Used for PSSM prediction.  
+  Used for PSSM prediction.    
   *Schuepbach P et al. pfsearchV3: a code acceleration and heuristic to search PROSITE profiles. Bioinformatics 2013, 10.1093/bioinformatics/btt129*
 
 
 ## Licence
 
-GPL v3
+[GPL v3](https://github.com/koualab/conodictor/blob/main/LICENSE)
 
 ## Authors
 
-* Anicet Ebou
-* Dominique Koua
+* [Anicet Ebou](https://orcid.org/0000-0003-4005-177X)
+* [Dominique Koua](https://www.researchgate.net/profile/Dominique_Koua)
