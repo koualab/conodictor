@@ -13,13 +13,12 @@ hidden Markov models and position-specific scoring matrix.
 ### Bioconda
 
 
-### Ubuntu/Debian/Mint
+### nix-like operating systems 
 
 ```
-sudo apt-get update
-pip3 install datetime
-git clone https://github.com/koualab/conodictor.git
-cd conodictor-main
+git clone https://github.com/koualab/conodictor.git conodictor
+cd conodictor
+pip3 install -r requirements.txt
 sudo cp conodictor /usr/local/bin
 sudo mkdir /usr/share/conodictor/db
 sudo cp db/* /usr/share/conodictor/db
@@ -27,40 +26,10 @@ sudo cp db/* /usr/share/conodictor/db
 export CONODB=/usr/share/conodictor/db
 conodictor -h
 ```
-
-### Centos/Fedora/RHEL
-
-```
-sudo yum update
-pip3 install datetime
-git clone https://github.com/koualab/conodictor.git
-cd conodictor-main
-sudo cp conodictor /usr/local/bin
-sudo mkdir /usr/share/conodictor/db
-sudo cp db/* /usr/share/conodictor/db
-# Edit .bashrc and/or .bash_profile
-export CONODB=/usr/share/conodictor/db
-conodictor -h
-```
-
-### MacOS
-
-```
-pip3 install datetime
-git clone https://github.com/koualab/conodictor.git
-cd conodictor-main
-sudo cp conodictor /usr/local/bin
-sudo mkdir /usr/share/conodictor/db
-sudo cp db/* /usr/share/conodictor/db
-# Edit .bashrc and/or .bash_profile
-export CONODB=/usr/share/conodictor/db
-conodictor -h
-```
-  
 
 ## Test
 
-* Type `itap -h` and it should output its help screen.
+* Type `conodictor -h` and it should output its help screen.
   
 
 
@@ -74,7 +43,7 @@ conodictor seqs.fa.gz
 ## Output files
 
 ```
-conodictor_summary.txt
+summary.txt
 
 
 sequence  hmm_pred  pssm_pred definitive_pred
@@ -101,6 +70,7 @@ Setup:
          --debug       Activate debug mode
 
 Standard meta-options:
+         --license     Print license and exit
          --usage, -u   Print program usage and exit
          --help, -h    Print help and exit
 
