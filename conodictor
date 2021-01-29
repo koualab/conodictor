@@ -353,6 +353,9 @@ def cdpred(hmmclass, pssmclass):
 
 
 def test_sequence(s):
+    """
+    Test sequence type
+    """
     dna = 'ATCG'
     prot = 'ACDEFGHIKLMNPQRSTVWYXBZJ'
     stype = ''
@@ -500,7 +503,7 @@ def print_install_tool(tool):
 
 def msg(text):
     """
-    Produce nice message and info output on terminal
+    Produce nice message and info output on terminal.
     """
     t = datetime.now().strftime("%H:%M:%S")
     line = f'[{t}] {text}'
@@ -511,6 +514,7 @@ def msg(text):
 
 def translate_seq(seq):
     """
+    Translate DNA sequence to proteins.
     """
     seqlist = []
     # frame 1
