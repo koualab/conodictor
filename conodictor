@@ -36,15 +36,14 @@ helptime = datetime.now().strftime("%a, %d %b %Y %H:%M:%S")
 parser = argparse.ArgumentParser(
     prog            = 'conodictor',
     formatter_class = argparse.RawDescriptionHelpFormatter,
-    usage           = 'conodictor [options] seqs.fa',
+    usage           = 'conodictor [options] seqs.fa.gz',
     epilog          = f"Version:   {VERSION}\nLicence:   GPL-3\nHomepage:  {URL}\nAuthor:    {AUTHOR}\nLast Run:  {helptime}.")
 
 parser.add_argument('seqs', help   = 'Specify input sequences fasta file')
-out_group = parser.add_mutually_exclusive_group()
-out_group.add_argument('--out',      type   = pathlib.Path, 
+parser.add_argument('--out',      type   = pathlib.Path, 
                        default = 'conoDictor',
                        help = 'Specify Output directory')
-out_group.add_argument('--force',    action = 'store_true',
+parser.add_argument('--force',    action = 'store_true',
                        help = 'Force re-use output directory')
 parser.add_argument(   '--quiet',    action = 'store_true',
                        help = 'Decrease program verbosity')
@@ -57,7 +56,9 @@ def main():
     try:
         dbdir = os.environ['CONODB']
     except KeyError:
-        msg('Databases files needed for classification not found in $PATH. Please set CONODB environment variable to the path where the HMMs and PSSMs are stored.')
+        print('conodictor: error: Databases files needed for classification not found in $PATH.', file = sys.stderr)
+        print('Please set CONODB environment variable to the path where the HMMs and PSSMs are stored.', file = sys.stderr)
+        print('Visit https://github.com/koualab/conodictor for more information', file = sys.stderr)
         sys.exit(1)
     
     # Handling output directory creation-------------------------------------
@@ -67,7 +68,9 @@ def main():
             shutil.rmtree(args.out)
             os.mkdir(args.out)
         else:
-            raise NameError('Default folder (conoDictor) already exist!. Please change it using --out option or use --force to reuse it.')
+            print('usage: conodictor [options] seqs.fa.gz', file = sys.stderr)
+            print(f"conodictor: error: Your choosen output folder '{args.out}' already exist!. Please change it using --out option or use --force to reuse it.", file = sys.stderr)
+            sys.exit(1)
     else:
         msg(f'Creating output directory {args.out}')
         os.mkdir(args.out)
@@ -234,15 +237,15 @@ def main():
             )
         elif sid in hmmfam and sid not in pssmfam:
             finalfam[sid].extend(
-                [hmmfam[sid], 'UNKNOWN', cdpred(hmmfam[sid], 'UNKOWN')]
+                [hmmfam[sid], 'UNKNOWN', cdpred(hmmfam[sid], 2)]
             )
         elif sid in pssmfam and sid not in hmmfam:
             finalfam[sid].extend(
-                ['UNKNOWN', pssmfam[sid], cdpred('UNKOWN', pssmfam[sid])]
+                ['UNKNOWN', pssmfam[sid], cdpred(2, pssmfam[sid])]
             )
         else:
             finalfam[sid].extend(
-                ['UNKOWN', 'UNKOWN', cdpred('UNKOWN', 'UNKNOWN')]
+                ['UNKOWN', 'UNKOWN', cdpred(2, 2)]
             )
     
     outfile = open(pathlib.Path(args.out, 'summary.txt'), 'a')
@@ -255,6 +258,7 @@ def main():
     # Finishing -------------------------------------------------------------
     os.remove(pathlib.Path(args.out, 'out.hmmer'))
     os.remove(pathlib.Path(args.out, 'out.pssm'))
+    os.remove(pathlib.Path(f'{inpath}.fxi'))
     msg('Classification finished succesfully.')
     msg('Creating donut plot')
     donut_graph()
@@ -330,13 +334,15 @@ def cdpred(hmmclass, pssmclass):
     R
     """
     deffam = None
+    # The use of number 2 for match is arbitral. Matching 'UNKNOWN' not works
+    # as intended (I don't know why actually). For now using 2 works as a charm :)
     if hmmclass == pssmclass:
         deffam = hmmclass
-    elif hmmclass == 'UNKNOWN' and pssmclass != 'UNKNOWN':
+    elif hmmclass == 2 and pssmclass != 2:
         deffam = pssmclass
-    elif pssmclass == 'UNKNOWN' and hmmclass != 'UNKNOWN':
+    elif pssmclass == 2 and hmmclass != 2:
         deffam = hmmclass
-    elif pssmclass and hmmclass == 'UNKNOWN':
+    elif pssmclass and hmmclass == 2:
         deffam == 'UNKNOWN'
     elif 'CONFLICT' in pssmclass and 'CONFLICT' in hmmclass:
         fams_pssm = re.search('(?<=CONFLICT)(.*)and(.*)', pssmclass)
