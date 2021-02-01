@@ -60,8 +60,12 @@ General:
 
 Outputs:
          --out         Specify output folder name
+         --all         Add unpredicted sequence in output.
          --force       Force reuse of output folder
 
+Computation:
+         --cpus        Specify number of threads
+         
 Setup:
          --quiet       Decrease verbosity
          --debug       Activate debug mode

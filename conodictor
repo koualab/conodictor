@@ -26,7 +26,7 @@ import warnings
 
 AUTHOR  = 'Anicet Ebou <anicet.ebou@gmail.com>'
 URL     = 'https://github.com/koualab/conodictor.git'
-VERSION = '2.0'
+VERSION = '2.1'
 
 # Define start time----------------------------------------------------------
 startime = datetime.now()
@@ -39,15 +39,19 @@ parser = argparse.ArgumentParser(
     usage           = 'conodictor [options] seqs.fa.gz',
     epilog          = f"Version:   {VERSION}\nLicence:   GPL-3\nHomepage:  {URL}\nAuthor:    {AUTHOR}\nLast Run:  {helptime}.")
 
-parser.add_argument('seqs', help   = 'Specify input sequences fasta file')
-parser.add_argument('--out',      type   = pathlib.Path, 
+parser.add_argument('seqs',    help   = 'Specify input sequences fasta file')
+parser.add_argument('--out',   type   = pathlib.Path, 
                        default = 'conoDictor',
                        help = 'Specify Output directory')
-parser.add_argument('--force',    action = 'store_true',
+parser.add_argument('--all',   action = 'store_true',
+                       help = 'Display unpredicted sequence in output')
+parser.add_argument('--cpus',  type = int, 
+                       default = 1, help = 'Define number of threads')
+parser.add_argument('--force', action = 'store_true',
                        help = 'Force re-use output directory')
-parser.add_argument(   '--quiet',    action = 'store_true',
+parser.add_argument('--quiet', action = 'store_true',
                        help = 'Decrease program verbosity')
-parser.add_argument(   '--debug',    action = 'store_true',
+parser.add_argument('--debug', action = 'store_true',
                        help = 'Activate debug mode')
 args = parser.parse_args()
 
@@ -95,7 +99,7 @@ def main():
     msg(f'Operating system is {platform.system()}')
 
     # Verify presence of needed tools ---------------------------------------
-    needed_tools = ('hmmsearch', 'pfsearch', 'ps_scan.pl')
+    needed_tools = ('hmmsearch', 'pfscanV3')
     
     for tool in needed_tools:
         if find_executable(tool) is not None:
@@ -109,13 +113,9 @@ def main():
     hmmsearch_match = re.findall(r'# HMMER\s+(\d+\.\d+)',
                                  sub_hmmsearch.stdout.decode('utf-8'))
 
-    sub_pfsearch = subprocess.run(['pfsearch', '-h'], capture_output=True)
-    pfsearch_match = re.findall(r"pfsearch\s+(\d+\.\d+ revision\s+\d\.\w)",
-                                 sub_pfsearch.stderr.decode('utf-8'))
-    
-    sub_psscan = subprocess.run(['ps_scan.pl', '-h'], capture_output=True)
-    psscan_match = re.findall(r'ps_scan version\s+(\d+\.\d+)',
-                                 sub_psscan.stdout.decode('utf-8'))
+    sub_pfscan = subprocess.run(['pfscanV3', '-h'], capture_output=True)
+    pfscan_match = re.findall(r"Version\s+(\d+\.\d+\.\d+)",
+                                 sub_pfscan.stdout.decode('utf-8'))
 
 
     # Check that version-----------------------------------------------------
@@ -162,9 +162,10 @@ def main():
             msg(f'You provided DNA fasta file')
             msg(f'Translating input sequences')
             do_translation(
-                pathlib.Path(args.out, pathlib.Path(args.seqs).stem), 
-                pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
+                str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem)), 
+                str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem))
             )
+            msg(f'Translation done!')
             inpath = pathlib.Path(args.out, 
                         f'{pathlib.Path(args.seqs).stem}_proteins.fa')
         elif test_sequence(ingzfa[1].seq) == 'protein':
@@ -177,9 +178,10 @@ def main():
             msg(f'You provided DNA fasta file')
             msg(f'Translating input sequences')
             do_translation(
-                pathlib.Path(args.out, os.path.basename(args.seqs)), 
-                pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
+                str(pathlib.Path(args.seqs)), 
+                str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem))
             )
+            msg(f'Translation done!')
             inpath = pathlib.Path(args.out, 
                          f'{pathlib.Path(args.seqs).stem}_proteins.fa')
         elif test_sequence(infa[1].seq) == 'protein':
@@ -191,9 +193,9 @@ def main():
     seqids = infile.keys()
     
     # HMMs-------------------------------------------------------------------
-    msg('Launching HMM prediction')
-    msg(f'Using hmmsearch {hmmsearch_version}')
-    subprocess.run(['hmmsearch', '-E', '0.1', '--noali', '-o', pathlib.Path(args.out, 'out.hmmer'), pathlib.Path(dbdir,'conodictor.hmm'), inpath])
+    msg('Running HMM prediction')
+    msg(f'Using hmmsearch v{hmmsearch_version}')
+    subprocess.run(['hmmsearch', '--cpu', str(args.cpus), '-E', '0.1', '--noali', '-o', pathlib.Path(args.out, 'out.hmmer'), pathlib.Path(dbdir,'conodictor.hmm'), inpath])
     
     hmmdict = defaultdict(lambda: defaultdict(list))
 
@@ -209,9 +211,9 @@ def main():
     msg('Done with HMM prediction')
     
     # PSSMs------------------------------------------------------------------
-    msg('Launching PSSM prediction')
-    msg(f'Using pfsearch {pfsearch_match[0]} and ps_scan.pl {psscan_match[0]}')
-    pssm_run = subprocess.run(['ps_scan.pl', '-w', 'pfsearch', '-o', 'pff', '-d' ,pathlib.Path(dbdir, 'conodictor.pssm'), inpath], capture_output = True)
+    msg('Running PSSM prediction')
+    msg(f'Using pfscan v{pfscan_match[0]}')
+    pssm_run = subprocess.run(['pfscanV3', '--nthreads', str(args.cpus), '-o', '7', pathlib.Path(dbdir, 'conodictor.pssm'), '-f', inpath], capture_output = True)
     
     with open(pathlib.Path(args.out, 'out.pssm'), 'w') as po:
         po.write(pssm_run.stdout.decode("utf-8"))
@@ -221,7 +223,7 @@ def main():
     with open(pathlib.Path(args.out, 'out.pssm')) as pssmfile:
         rd = csv.reader(pssmfile, delimiter = "\t")
         for row in rd:
-            pssmdict[row[0]].append(row[3].split('_')[1])
+            pssmdict[row[3]].append((row[0].split('|')[0]).split('_')[1])
     
     pssmfam = get_pssm_fam(pssmdict)
     
@@ -237,29 +239,35 @@ def main():
             )
         elif sid in hmmfam and sid not in pssmfam:
             finalfam[sid].extend(
-                [hmmfam[sid], 'UNKNOWN', cdpred(hmmfam[sid], 2)]
+                [hmmfam[sid], 'UNKNOWN', hmmfam[sid]]
             )
         elif sid in pssmfam and sid not in hmmfam:
             finalfam[sid].extend(
-                ['UNKNOWN', pssmfam[sid], cdpred(2, pssmfam[sid])]
+                ['UNKNOWN', pssmfam[sid], pssmfam[sid]]
             )
         else:
             finalfam[sid].extend(
-                ['UNKOWN', 'UNKOWN', cdpred(2, 2)]
+                ['UNKOWN', 'UNKOWN', 'UNKNOWN']
             )
     
     outfile = open(pathlib.Path(args.out, 'summary.txt'), 'a')
     outfile.write('sequence\thmm_pred\tpssm_pred\tdefinitive_pred\n')
-    for k, v in finalfam.items():
-        outfile.write(f'{k}\t{v[0]}\t{v[1]}\t{v[2]}\n')
-    outfile.close()
+    if not args.all:
+        uniq_final = {k: v for k, v in finalfam.items() if bool(set(v).intersection(['UNKNOWN', 'UNKNOWN', 'UNKNOWN'])) == False }
+        for uk, uv in uniq_final.items():
+            outfile.write(f'{uk}\t{uv[0]}\t{uv[1]}\t{uv[2]}\n')
+        outfile.close()
+    else:
+        for k, v in finalfam.items():
+            outfile.write(f'{k}\t{v[0]}\t{v[1]}\t{v[2]}\n')
+        outfile.close()
     msg('Done with writing output.')
 
     # Finishing -------------------------------------------------------------
     os.remove(pathlib.Path(args.out, 'out.hmmer'))
     os.remove(pathlib.Path(args.out, 'out.pssm'))
     os.remove(pathlib.Path(f'{inpath}.fxi'))
-    msg('Classification finished succesfully.')
+    msg('Classification finished successfully.')
     msg('Creating donut plot')
     donut_graph()
     msg('Done creating donut plot')
@@ -338,12 +346,6 @@ def cdpred(hmmclass, pssmclass):
     # as intended (I don't know why actually). For now using 2 works as a charm :)
     if hmmclass == pssmclass:
         deffam = hmmclass
-    elif hmmclass == 2 and pssmclass != 2:
-        deffam = pssmclass
-    elif pssmclass == 2 and hmmclass != 2:
-        deffam = hmmclass
-    elif pssmclass and hmmclass == 2:
-        deffam == 'UNKNOWN'
     elif 'CONFLICT' in pssmclass and 'CONFLICT' in hmmclass:
         fams_pssm = re.search('(?<=CONFLICT)(.*)and(.*)', pssmclass)
         fams_hmm = re.search('(?<=CONFLICT)(.*)and(.*)', hmmclass)
