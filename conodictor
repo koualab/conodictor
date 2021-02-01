@@ -329,17 +329,6 @@ def cdpred(hmmclass, pssmclass):
      - hmmclass  - HMM predicted family, required (string)
      - pssmclass - PSSM predicted family, required (string)
     
-    >>> cdpred('A', 'M')
-    CONFLICT A and M
-
-    >>> cdpred('A', 'A')
-    A
-
-    >>> cdpred('A', 'UNKNOWN')
-    A
-
-    >>> cdpred('R', 'CONFLICT A and R')
-    R
     """
     deffam = None
     # The use of number 2 for match is arbitral. Matching 'UNKNOWN' not works
