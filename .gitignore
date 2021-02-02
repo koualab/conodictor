@@ -1,4 +1,4 @@
 .vscode/*
 ConoDictor/*
 test/testset.fa.gz
-conoenv/*
+.venv/*
