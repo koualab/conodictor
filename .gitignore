@@ -2,3 +2,6 @@
 ConoDictor/*
 test/testset.fa.gz
 .venv/*
+conodictor.egg-info/*
+dist/*
+setup.py

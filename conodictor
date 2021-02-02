@@ -107,6 +107,7 @@ def main():
         msg(f"Creating output directory {args.out}")
         os.mkdir(args.out)
 
+    # Get current user name
     try:
         user = os.environ["USER"]
     except KeyError:
