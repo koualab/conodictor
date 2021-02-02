@@ -26,7 +26,7 @@ import warnings
 
 AUTHOR = "Anicet Ebou <anicet.ebou@gmail.com>"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.1"
+VERSION = "2.1.1"
 
 # Define start time----------------------------------------------------------
 startime = datetime.now()
