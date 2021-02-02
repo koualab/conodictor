@@ -117,11 +117,11 @@ Submit problems or requests to the [Issue Tracker](https://github.com/koualab/co
 
 ### Mandatory
 
-* **HMMER 3**  
+* [**HMMER 3**](https://hmmer.org)  
   Used for HMM profile prediction.   
   *Eddy SR, Accelerated Profile HMM Searches. PLOS Computational Biology 2011, 10.1371/journal.pcbi.1002195*
 
-* **Pftools**  
+* [**Pftools**](https://github.com/sib-swiss/pftools3)  
   Used for PSSM prediction.    
   *Schuepbach P et al. pfsearchV3: a code acceleration and heuristic to search PROSITE profiles. Bioinformatics 2013, 10.1093/bioinformatics/btt129*
 
