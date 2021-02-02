@@ -70,7 +70,6 @@ Setup:
          --debug       Activate debug mode
 
 Standard meta-options:
-         --usage, -u   Print program usage and exit
          --help, -h    Print help and exit
 
 ```

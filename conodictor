@@ -204,7 +204,8 @@ def main():
             hits = record.hits
             for hit in hits:
                 hmmdict[hit.id][record.id.split('_')[1]].append(hit.evalue)
-
+    hmmfile.close()
+    
     hmmscore = hmm_threshold(hmmdict)
     hmmfam = get_hmm_fam(hmmscore)
     
@@ -217,13 +218,15 @@ def main():
     
     with open(pathlib.Path(args.out, 'out.pssm'), 'w') as po:
         po.write(pssm_run.stdout.decode("utf-8"))
-    
+    po.close()
+
     pssmdict = defaultdict(list)
 
     with open(pathlib.Path(args.out, 'out.pssm')) as pssmfile:
         rd = csv.reader(pssmfile, delimiter = "\t")
         for row in rd:
             pssmdict[row[3]].append((row[0].split('|')[0]).split('_')[1])
+    pssmfile.close()
     
     pssmfam = get_pssm_fam(pssmdict)
     
@@ -491,7 +494,7 @@ def print_install_tool(tool):
     """
     if tool == 'hmmsearch':
         msg(f'{tool} not found. Please visit https://hmmer3.org.')
-    elif tool == 'pfsearch' or tool == 'ps_scan.pl':
+    elif tool == 'pfscanV3':
         msg(f'{tool} not found. Please visit https://github.com/sib-swiss/pftools3.')
     
     sys.exit(1)
