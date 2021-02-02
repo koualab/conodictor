@@ -46,7 +46,7 @@ parser.add_argument('--out',   type   = pathlib.Path,
 parser.add_argument('--all',   action = 'store_true',
                        help = 'Display unpredicted sequence in output')
 parser.add_argument('--cpus',  type = int, 
-                       default = 1, help = 'Define number of threads')
+                       default = 1, help = 'Specify the number of threads')
 parser.add_argument('--force', action = 'store_true',
                        help = 'Force re-use output directory')
 parser.add_argument('--quiet', action = 'store_true',
@@ -331,8 +331,7 @@ def cdpred(hmmclass, pssmclass):
     
     """
     deffam = None
-    # The use of number 2 for match is arbitral. Matching 'UNKNOWN' not works
-    # as intended (I don't know why actually). For now using 2 works as a charm :)
+
     if hmmclass == pssmclass:
         deffam = hmmclass
     elif 'CONFLICT' in pssmclass and 'CONFLICT' in hmmclass:
