@@ -45,7 +45,7 @@ parser.add_argument("seqs", help="Specify input sequences fasta file")
 parser.add_argument(
     "--out",
     type=pathlib.Path,
-    default="conoDictor",
+    default="ConoDictor",
     help="Specify Output directory",
 )
 parser.add_argument(
@@ -78,7 +78,7 @@ def main():
             file=sys.stderr,
         )
         print(
-            "Please set CONODB environment variable to the path"
+            "Please set CONODB environment variable to the path "
             + "where models are stored.",
             file=sys.stderr,
         )
@@ -98,8 +98,8 @@ def main():
             print("usage: conodictor [options] seqs.fa.gz", file=sys.stderr)
             print(
                 f"conodictor: error: Your choosen output folder '{args.out}'"
-                + "already exist!. Please change it using --out option"
-                + "or use --force to reuse it.",
+                + " already exist!. Please change it using --out option"
+                + " or use --force to reuse it.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -152,13 +152,13 @@ def main():
     elif hmmsearch_match[0] and float(hmmsearch_match[0]) < 3:
         raise ValueError(
             "hmmsearch installed is below 3.0 version, please upgrade"
-            + "at https://hmmer3.org."
+            + " at https://hmmer3.org."
         )
 
     else:
         raise ValueError(
             "Cannot parse HMMER version. Please check it's correctly"
-            + "installed. See https://hmmer3.org."
+            + " installed. See https://hmmer3.org."
         )
 
     # Input sequence file manipulation---------------------------------------
@@ -172,7 +172,7 @@ def main():
     else:
         msg(
             "Your file is not a DNA or protein file, please provide a DNA or"
-            + "protein fasta file"
+            + " protein fasta file"
         )
         sys.exit(1)
 
@@ -618,8 +618,13 @@ def do_translation(infile, outfile, sw=60):
                 warnings.simplefilter("ignore")
                 protseq = translate_seq(sequence.seq)
                 for idx, frame in enumerate(protseq):
+                    # Rule E203 from flacke8 check for extraneous whitespace
+                    # before a colon. But black follow PEP8 rules.
+                    # A PR is open to resolve this issue:
+                    # https://github.com/PyCQA/pycodestyle/pull/914
                     seq_letters = [
-                        frame[i : i + sw] for i in range(0, len(frame), sw)
+                        frame[i : i + sw]  # noqa: E203
+                        for i in range(0, len(frame), sw)
                     ]
                     nl = "\n"
                     protfile.write(
