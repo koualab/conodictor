@@ -13,21 +13,55 @@ hidden Markov models and position-specific scoring matrix.
 ### Unix-like operating systems 
 
 ```
+# Download ConoDictor repository and change directory
 git clone https://github.com/koualab/conodictor.git conodictor
 cd conodictor
-pip3 install -r requirements.txt
+
+# Copy conodictor bin folder: Requires admin privileges
 sudo cp conodictor /usr/local/bin
+
+# Copy conodictor databases: Requires admin privileges
 sudo mkdir /usr/share/conodictor/db
 sudo cp db/* /usr/share/conodictor/db
-# Edit .bashrc and/or .bash_profile
+
+# Add path to databases in .bashrc and/or .bash_profile
 export CONODB=/usr/share/conodictor/db
+
+# Create new python environment conoenv
+cd ..
+python3 -m venv conoenv
+pip3 install -r conodictor/requirements.txt
+
+# Restart terminal or source .bashrc or .bash_profile
+# Test conodictor is correctly installed
 conodictor -h
 ```
 
 ## Test
 
-* Type `conodictor -h` and it should output its help screen.
-  
+* Type `conodictor -h` and it should output something like:
+
+```
+usage: conodictor [options] seqs.fa.gz
+
+positional arguments:
+  seqs         Specify input sequences fasta file
+
+optional arguments:
+  -h, --help   show this help message and exit
+  --out OUT    Specify Output directory
+  --all        Display unpredicted sequence in output
+  --cpus CPUS  Specify the number of threads
+  --force      Force re-use output directory
+  --quiet      Decrease program verbosity
+  --debug      Activate debug mode
+
+Version:   2.1.3
+Licence:   GPL-3
+Homepage:  https://github.com/koualab/conodictor.git
+Author:    Anicet Ebou <anicet.ebou@gmail.com>
+Last Run: Tue, 02 Feb 2021 23:33:00.
+```
 
 
 ## Invoking conodictor
