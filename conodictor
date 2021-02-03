@@ -430,7 +430,7 @@ def test_sequence(s):
     Test sequence type
     """
     dna = "ATCG"
-    prot = "ACDEFGHIKLMNPQRSTVWYXBZJ"
+    prot = "ABCDEFGHIKLMNPQRSTVWXYZ"
     stype = ""
 
     if all(i in dna for i in s):
