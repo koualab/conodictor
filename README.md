@@ -30,7 +30,7 @@ export CONODB=/usr/share/conodictor/db
 # Create new python environment conoenv
 cd ..
 python3 -m venv conoenv
-pip3 install -r conodictor/requirements.txt
+python3 -m pip install -r conodictor/requirements.txt
 
 # Restart terminal or source .bashrc or .bash_profile
 # Test conodictor is correctly installed
