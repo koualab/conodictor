@@ -168,7 +168,7 @@ def main():
     infa = pyfastx.Fasta(args.seqs)
 
     # Test if file type is accepted
-    if test_sequence(infa[1].seq) in ["DNA", "protein"]:
+    if isdnaorproteins(infa[1].seq) in ["DNA", "protein"]:
         pass
     else:
         msg(
@@ -195,7 +195,7 @@ def main():
         )
 
         # Test if alphabet is DNA, or protein and translate or not
-        if test_sequence(ingzfa[1].seq) == "DNA":
+        if isdnaorproteins(ingzfa[1].seq) == "DNA":
             msg("You provided DNA fasta file")
             msg("Translating input sequences")
             do_translation(
@@ -206,13 +206,13 @@ def main():
             inpath = pathlib.Path(
                 args.out, f"{pathlib.Path(args.seqs).stem}_proteins.fa"
             )
-        elif test_sequence(ingzfa[1].seq) == "protein":
+        elif isdnaorproteins(ingzfa[1].seq) == "protein":
             msg("You provided protein fasta file")
             inpath = pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
 
     elif not infa.is_gzip:
         msg("Your file is not gzip compressed")
-        if test_sequence(infa[1].seq) == "DNA":
+        if isdnaorproteins(infa[1].seq) == "DNA":
             msg("You provided DNA fasta file")
             msg("Translating input sequences")
             do_translation(
@@ -223,7 +223,7 @@ def main():
             inpath = pathlib.Path(
                 args.out, f"{pathlib.Path(args.seqs).stem}_proteins.fa"
             )
-        elif test_sequence(infa[1].seq) == "protein":
+        elif isdnaorproteins(infa[1].seq) == "protein":
             msg("You provided protein fasta file")
             inpath = args.seqs
 
@@ -302,7 +302,11 @@ def main():
     for sid in seqids:
         if sid in hmmfam and sid in pssmfam:
             finalfam[sid].extend(
-                [hmmfam[sid], pssmfam[sid], cdpred(hmmfam[sid], pssmfam[sid])]
+                [
+                    hmmfam[sid],
+                    pssmfam[sid],
+                    definitive_prediction(hmmfam[sid], pssmfam[sid]),
+                ]
             )
         elif sid in hmmfam and sid not in pssmfam:
             finalfam[sid].extend([hmmfam[sid], "UNKNOWN", hmmfam[sid]])
@@ -397,7 +401,7 @@ def donut_graph():
     )
 
 
-def cdpred(hmmclass, pssmclass):
+def definitive_prediction(hmmclass, pssmclass):
     """
     Gives definitive classification by combining HMM and PSSM classification.
 
@@ -425,9 +429,11 @@ def cdpred(hmmclass, pssmclass):
     return deffam
 
 
-def test_sequence(s):
+def isdnaorproteins(s):
     """
-    Test sequence type
+    Test if input sequence is DNA or proteins.
+
+    :s input sequence
     """
     dna = "ATCG"
     prot = "ABCDEFGHIKLMNPQRSTVWXYZ"
@@ -527,43 +533,6 @@ def get_hmm_fam(mdict):
     return seqfam
 
 
-def get_hmm_class(mydict):
-    """
-    Takes a dict: {'A': 0.023123, 'B': 0.23233} and return
-    they key of the item with the value 100 times lower than
-    any other value in dict
-    """
-    conofam = None
-    nonzerodict = {}
-
-    for key, value in mydict.items():
-        if value != 1:
-            nonzerodict[key] = value
-
-    # If dict has only one item, then returning the key of that item
-    if len(nonzerodict) == 1:
-        conofam = next(iter(nonzerodict))
-    else:
-        # Finding the two smallest values in dict value
-        two_smallest = nsmallest(2, nonzerodict.values())
-        if two_smallest[0] == 0 and two_smallest[1] == 0:
-            conofam = "UNKNOWN"
-        elif two_smallest[0] * 100 == two_smallest[1]:
-            value1 = list(mydict.keys())[
-                list(mydict.values()).index(two_smallest[0])
-            ]
-            value2 = list(mydict.keys())[
-                list(mydict.values()).index(two_smallest[1])
-            ]
-            conofam = f"CONFLICT {value1} and {value2}"
-        else:
-            conofam = list(mydict.keys())[
-                list(mydict.values()).index(two_smallest[0])
-            ]
-
-    return conofam
-
-
 def print_install_tool(tool):
     """
     Print useful installation instruction for required tools
@@ -589,7 +558,7 @@ def msg(text):
         print(line, file=sys.stderr)
 
 
-def translate_seq(seq):
+def _translate_seq(seq):
     """
     Translate DNA sequence to proteins.
     """
@@ -617,7 +586,7 @@ def do_translation(infile, outfile, sw=60):
         for sequence in seqin:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                protseq = translate_seq(sequence.seq)
+                protseq = _translate_seq(sequence.seq)
                 for idx, frame in enumerate(protseq):
                     # Rule E203 from flacke8 check for extraneous whitespace
                     # before a colon. But black follow PEP8 rules.
