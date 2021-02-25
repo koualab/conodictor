@@ -354,8 +354,10 @@ def main():
 # Functions -----------------------------------------------------------------
 def donut_graph():
     """
-    Make a donut graph from stats of predicted sequences.
+    donut_graph make a donut graph from outputed stats of
+    predicted sequences.
     """
+
     data = pd.read_table(pathlib.Path(args.out, "summary.txt"))
     plot_data = data[data.columns[3]].tolist()
     dtc = Counter(plot_data)
@@ -403,13 +405,13 @@ def donut_graph():
 
 def definitive_prediction(hmmclass, pssmclass):
     """
-    Gives definitive classification by combining HMM and PSSM classification.
+    definitive_prediction gives definitive classification by
+    combining HMM and PSSM classification.
 
-    Arguments:
-     - hmmclass  - HMM predicted family, required (string)
-     - pssmclass - PSSM predicted family, required (string)
-
+    :hmmclass: HMM predicted family, required (string)
+    :pssmclass: PSSM predicted family, required (string)
     """
+
     deffam = None
 
     if hmmclass == pssmclass:
@@ -431,10 +433,11 @@ def definitive_prediction(hmmclass, pssmclass):
 
 def isdnaorproteins(s):
     """
-    Test if input sequence is DNA or proteins.
+    isdnaorproteins test if input sequence is DNA or proteins.
 
-    :s input sequence
+    :s: input sequence
     """
+
     dna = "ATCG"
     prot = "ABCDEFGHIKLMNPQRSTVWXYZ"
     stype = ""
@@ -451,18 +454,17 @@ def isdnaorproteins(s):
 
 def get_pssm_fam(mdict):
     """
-    Give predicted family by PSSM.
-
-    Argument:
-     - mdict - Dictionnary, required (dict)
-
-    Return the family with the highest number of occurence in PSSM profile
-    match recorded as list for each sequence id.
+    get_pssm_fam return the family with the highest number of
+    occurence in PSSM profile match recorded as list for each
+    sequence id.
 
     >>> my_dict = {ID1: ['A', 'A', 'B', 'M'], ID2: ['M', 'P', 'O1', 'O1']}
     >>> get_pssm_fam(my_dict)
     {ID1: 'A', ID2: 'O1'}
+
+    :mdict: Dictionnary, required (dict)
     """
+
     fam = ""
     pssmfam = {}
     for key in mdict.keys():
@@ -489,13 +491,12 @@ def get_pssm_fam(mdict):
 
 def hmm_threshold(mdict):
     """
-    Calculate evalue by family for each sequence.
+    hmm_threshold calculate evalue by family for each sequence
+    and return a dict with the evalue for each family.
 
-    Argument:
-     - mdict: Dictionnary, required (dict)
-
-    Return a dict with the evalue for each family.
+    :mdict: Dictionnary, required (dict)
     """
+
     score = defaultdict(dict)
     for key in mdict.keys():
         for k, v in mdict[key].items():
@@ -506,8 +507,11 @@ def hmm_threshold(mdict):
 
 def get_hmm_fam(mdict):
     """
-    Get sequence family from hmm dictionnary.
+    get_hmm_fam get sequence family from hmm dictionnary.
+
+    :mdict: Dictionnary of evalues by families.
     """
+
     conofam = ""
     seqfam = {}
     for key in mdict.keys():
@@ -535,8 +539,10 @@ def get_hmm_fam(mdict):
 
 def print_install_tool(tool):
     """
-    Print useful installation instruction for required tools
+    print_install_tool print useful installation
+    instruction for required tools.
     """
+
     if tool == "hmmsearch":
         msg(f"{tool} not found. Please visit https://hmmer3.org.")
     elif tool == "pfscanV3":
@@ -550,8 +556,11 @@ def print_install_tool(tool):
 
 def msg(text):
     """
-    Produce nice message and info output on terminal.
+    msg produce nice message and info output on terminal.
+
+    :text: Message to print to STDOUT.
     """
+
     t = datetime.now().strftime("%H:%M:%S")
     line = f"[{t}] {text}"
     if not args.quiet:
@@ -560,8 +569,11 @@ def msg(text):
 
 def _translate_seq(seq):
     """
-    Translate DNA sequence to proteins.
+    _translate_seq translate DNA sequence to proteins in the six frames.
+
+    :seq: DNA sequence to translate.
     """
+
     seqlist = []
     # frame 1
     seqlist.append(translate(seq))
@@ -580,6 +592,14 @@ def _translate_seq(seq):
 
 
 def do_translation(infile, outfile, sw=60):
+    """
+    do_translation translate a DNA fasta file into proteins
+    fasta file.
+
+    :infile: Input DNA fasta file.
+    :outfile: Output file.
+    :sw: Sequence width. Default: 60.
+    """
 
     seqin = pyfastx.Fasta(infile)
     with open(pathlib.Path(f"{outfile}_proteins.fa"), "w") as protfile:
@@ -607,10 +627,11 @@ def exception_handler(
     exception_type, exception, traceback, debug_hook=sys.excepthook
 ):
     """
-    Remove default debug info and traceback from python output on
-    command line. Use program --debug option to re-enable default
-    behaviour.
+    exception_handler remove default debug info and traceback
+    from python output on command line. Use program --debug
+    option to re-enable default behaviour.
     """
+
     if args.debug:
         debug_hook(exception_type, exception, traceback)
     else:

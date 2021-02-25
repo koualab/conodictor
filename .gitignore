@@ -2,3 +2,4 @@
 ConoDictor/*
 test/testset.fa.gz
 .venv/*
+.env
