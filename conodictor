@@ -26,7 +26,7 @@ import warnings
 
 AUTHOR = "Anicet Ebou <anicet.ebou@gmail.com>"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.1.3"
+VERSION = "2.1.4"
 
 # Define start time----------------------------------------------------------
 startime = datetime.now()
@@ -52,6 +52,11 @@ parser.add_argument(
     "--all",
     action="store_true",
     help="Display unpredicted sequence in output",
+)
+parser.add_argument(
+    "--graph",
+    action="store_true",
+    help="Create donut graph of predicted sequences",
 )
 parser.add_argument(
     "--cpus", type=int, default=1, help="Specify the number of threads"
@@ -334,13 +339,20 @@ def main():
     msg("Done with writing output.")
 
     # Finishing -------------------------------------------------------------
+    # Cleaning around ...
     os.remove(pathlib.Path(args.out, "out.hmmer"))
     os.remove(pathlib.Path(args.out, "out.pssm"))
+    os.remove(pathlib.Path(f"{args.seqs}.fxi"))
     os.remove(pathlib.Path(f"{inpath}.fxi"))
+
     msg("Classification finished successfully.")
-    msg("Creating donut plot")
-    donut_graph()
-    msg("Done creating donut plot")
+
+    # Creating graph if requested
+    if args.graph:
+        msg("Creating donut plot")
+        donut_graph()
+        msg("Done creating donut plot")
+
     msg(f"Check {args.out} folder for results")
     endtime = datetime.now()
     walltime = endtime - startime

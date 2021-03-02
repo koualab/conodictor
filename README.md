@@ -10,6 +10,23 @@ hidden Markov models and position-specific scoring matrix.
 
 ## Installation
 
+### Docker
+
+Accessible at https://hub.docker.com/u/ebedthan
+
+```
+docker pull ediman/conodictor:latest
+docker run ediman/conodictor:latest conodictor -h
+
+# Example of a run
+docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) conodictor:latest --out /data/outdir /data/input.fa.gz
+
+```
+
+See https://staph-b.github.io/docker-builds/run_containers/ for more informations about the run.
+
+
+
 ### Unix-like operating systems 
 
 ```
@@ -51,16 +68,17 @@ optional arguments:
   -h, --help   show this help message and exit
   --out OUT    Specify Output directory
   --all        Display unpredicted sequence in output
+  --graph      Create donut graph of predicted sequences
   --cpus CPUS  Specify the number of threads
   --force      Force re-use output directory
   --quiet      Decrease program verbosity
   --debug      Activate debug mode
 
-Version:   2.1.3
+Version:   2.1.4
 Licence:   GPL-3
 Homepage:  https://github.com/koualab/conodictor.git
 Author:    Anicet Ebou <anicet.ebou@gmail.com>
-Last Run: Tue, 02 Feb 2021 23:33:00.
+Last Run:  Tue, 02 Mar 2021 21:06:36.
 ```
 
 
@@ -94,6 +112,7 @@ General:
 Outputs:
          --out         Specify output folder name
          --all         Add unpredicted sequence in output.
+         --graph       Create donut graph of predicted sequences.
          --force       Force reuse of output folder
 
 Computation:
