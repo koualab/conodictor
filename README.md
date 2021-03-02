@@ -15,11 +15,11 @@ hidden Markov models and position-specific scoring matrix.
 Accessible at https://hub.docker.com/u/ebedthan
 
 ```
-docker pull ediman/conodictor:latest
-docker run ediman/conodictor:latest conodictor -h
+docker pull ebedthan/conodictor:latest
+docker run ebedthan/conodictor:latest conodictor -h
 
 # Example of a run
-docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) conodictor:latest --out /data/outdir /data/input.fa.gz
+docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) ebedthan/conodictor:latest --out /data/outdir /data/input.fa.gz
 
 ```
 
