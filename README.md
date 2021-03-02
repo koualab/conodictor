@@ -25,6 +25,12 @@ docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) ebedthan/conodictor:late
 
 See https://staph-b.github.io/docker-builds/run_containers/ for more informations about the run.
 
+### Singularity
+
+```
+singularity build conodictor.sif docker://ebedthan/conodictor:latest
+singularity exec conodictor.sif conodictor -h
+```
 
 
 ### Unix-like operating systems 
