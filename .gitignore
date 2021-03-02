@@ -1,7 +1,4 @@
 .vscode/*
 ConoDictor/*
-test/testset.fa.gz
 .venv/*
 .env
-Dockerfile
-test.fas.gz
