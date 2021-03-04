@@ -49,6 +49,12 @@ parser.add_argument(
     help="Specify Output directory",
 )
 parser.add_argument(
+    "--mlen",
+    type=int,
+    default=0,
+    help="Minimum sequence length to consider for prediction",
+)
+parser.add_argument(
     "--all",
     action="store_true",
     help="Display unpredicted sequence in output",
@@ -235,6 +241,19 @@ def main():
     # Get sequence keys
     infile = pyfastx.Fasta(str(inpath))
     seqids = infile.keys()
+    if args.mlen != 0:
+        if infile.count(args.mlen) == 0:
+            msg(
+                f"Your input fasta file contains {infile.count(args.mlen)}"
+                + f" sequences with length >= {args.mlen}"
+            )
+            msg("No sequence will be predicted. Conodictor is stopping...")
+            sys.exit(1)
+        else:
+            msg(
+                f"Your input fasta file contains {infile.count(args.mlen)}"
+                + f" sequences with length >= {args.mlen}"
+            )
 
     # HMMs-------------------------------------------------------------------
     msg("Running HMM prediction")
@@ -304,6 +323,9 @@ def main():
     # Writing output---------------------------------------------------------
     msg("Writing output")
     finalfam = defaultdict(list)
+    if args.mlen != 0:
+        seqids = [s for s in seqids if len(infile[s]) >= args.mlen]
+
     for sid in seqids:
         if sid in hmmfam and sid in pssmfam:
             finalfam[sid].extend(
