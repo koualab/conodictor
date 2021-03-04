@@ -73,6 +73,7 @@ positional arguments:
 optional arguments:
   -h, --help   show this help message and exit
   --out OUT    Specify Output directory
+  --mlen MLEN  Minimum sequence length to consider for prediction
   --all        Display unpredicted sequence in output
   --graph      Create donut graph of predicted sequences
   --cpus CPUS  Specify the number of threads
@@ -117,6 +118,7 @@ General:
 
 Outputs:
          --out         Specify output folder name
+         --mlen        Minimum sequence length to consider for prediction. Default: all sequences are considered
          --all         Add unpredicted sequence in output.
          --graph       Create donut graph of predicted sequences.
          --force       Force reuse of output folder
