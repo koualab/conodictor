@@ -1,0 +1,5 @@
+sequence	hmm_pred	pssm_pred	definitive_pred
+sp|P0CB07|CA11_CONAJ	A	A	A
+sp|P0CB12|CA189_CONAJ	A	A	A
+sp|P0C1Y2|CA13_CONBN	A	A	A
+sp|Q9U619|CA12A_CONIM	A	A	A

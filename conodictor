@@ -52,7 +52,15 @@ parser.add_argument(
     "--mlen",
     type=int,
     default=0,
-    help="Minimum sequence length to consider for prediction",
+    help="Minimum sequence length to consider for prediction."
+    + " Default: all sequences length are considered",
+)
+parser.add_argument(
+    "--ndup",
+    type=int,
+    default=1,
+    help="Minimum number of sequence occurence for sequence to be considered"
+    + " .Default: 1",
 )
 parser.add_argument(
     "--all",
@@ -65,10 +73,15 @@ parser.add_argument(
     help="Create donut graph of predicted sequences",
 )
 parser.add_argument(
-    "--cpus", type=int, default=1, help="Specify the number of threads"
+    "--cpus",
+    type=int,
+    default=1,
+    help="Specify the number of threads. Default: 1",
 )
 parser.add_argument(
-    "--force", action="store_true", help="Force re-use output directory"
+    "--force",
+    action="store_true",
+    help="Force re-use output directory. Default: False",
 )
 parser.add_argument(
     "--quiet", action="store_true", help="Decrease program verbosity"
@@ -241,19 +254,34 @@ def main():
     # Get sequence keys
     infile = pyfastx.Fasta(str(inpath))
     seqids = infile.keys()
+
+    # If --mlen is specified, filter out sequence with len < mlen.
     if args.mlen != 0:
         if infile.count(args.mlen) == 0:
-            msg(
-                f"Your input fasta file contains {infile.count(args.mlen)}"
-                + f" sequences with length >= {args.mlen}"
-            )
+            msg(f"Input file contains 0 sequences with length >= {args.mlen}")
             msg("No sequence will be predicted. Conodictor is stopping...")
             sys.exit(1)
         else:
             msg(
-                f"Your input fasta file contains {infile.count(args.mlen)}"
+                f"Input file contains {infile.count(args.mlen)}"
                 + f" sequences with length >= {args.mlen}"
             )
+            seqids = seqids.filter(seqids >= args.mlen)
+
+    # If --ndup is specified, get sequence ids of duplicate sequence.
+    if args.ndup != 1:
+        seqids = get_dup_seqs(infile, seqids, args.ndup)
+        msg(
+            f"Input file contains {len(seqids)}"
+            + f" sequences with at least {args.ndup} occurences."
+            + " Only these sequences will be used for prediction."
+        )
+
+    # Create a fasta file of sequence after filtering
+    with open(pathlib.Path(args.out, "filtfa.fa"), "w") as fih:
+        for kid in seqids:
+            fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
+    fih.close()
 
     # HMMs-------------------------------------------------------------------
     msg("Running HMM prediction")
@@ -269,7 +297,7 @@ def main():
             "-o",
             pathlib.Path(args.out, "out.hmmer"),
             pathlib.Path(dbdir, "conodictor.hmm"),
-            inpath,
+            pathlib.Path(args.out, "filtfa.fa"),
         ]
     )
 
@@ -299,7 +327,7 @@ def main():
             "7",
             pathlib.Path(dbdir, "conodictor.pssm"),
             "-f",
-            inpath,
+            pathlib.Path(args.out, "filtfa.fa"),
         ],
         capture_output=True,
     )
@@ -323,8 +351,6 @@ def main():
     # Writing output---------------------------------------------------------
     msg("Writing output")
     finalfam = defaultdict(list)
-    if args.mlen != 0:
-        seqids = [s for s in seqids if len(infile[s]) >= args.mlen]
 
     for sid in seqids:
         if sid in hmmfam and sid in pssmfam:
@@ -366,6 +392,7 @@ def main():
     os.remove(pathlib.Path(args.out, "out.pssm"))
     os.remove(pathlib.Path(f"{args.seqs}.fxi"))
     os.remove(pathlib.Path(f"{inpath}.fxi"))
+    # os.remove(pathlib.Path(args.out, "filtfa.fa"))
 
     msg("Classification finished successfully.")
 
@@ -386,6 +413,35 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
+def get_dup_seqs(infile, idslist, mnoc):
+    """
+    get_dup_seqs search provided fasta file for duplicate sequence.
+    Return sequence ids of duplicate sequences.
+
+    :infile: Input fasta file to use for search
+    :idslist: Sequence ids list to consider
+    :mnoc: Minimum number of occurence wanted
+    """
+
+    dupid = []
+    flipped = defaultdict(set)
+    seqdict = defaultdict()
+    for id in idslist:
+        seqdict[id] = infile[id].seq
+
+    for key, value in seqdict.items():
+        if value not in flipped:
+            flipped[value] = [key]
+        else:
+            flipped[value].append(key)
+
+    for v in flipped.values():
+        if len(v) >= mnoc:
+            dupid.extend(v)
+
+    return dupid
+
+
 def donut_graph():
     """
     donut_graph make a donut graph from outputed stats of
