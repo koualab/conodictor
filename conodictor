@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+# TODO: 0. Write function that compute occurence of provided seqids
+#       0.1. Write function to query this counter to avoid to compute
+#            occurence each time if both are merged
+#       1. Text output of run informations
+#       2. New graph function
+
 import argparse
 from Bio import SearchIO
 from Bio.Seq import reverse_complement, translate
@@ -41,47 +47,47 @@ parser = argparse.ArgumentParser(
     + f"Homepage:  {URL}\nAuthor:    {AUTHOR}\nLast Run:  {helptime}.",
 )
 
-parser.add_argument("seqs", help="Specify input sequences fasta file")
+parser.add_argument("seqs", help="Specify input fasta file.")
 parser.add_argument(
     "--out",
     type=pathlib.Path,
     default="ConoDictor",
-    help="Specify Output directory",
+    help="Specify output folder.",
 )
 parser.add_argument(
     "--mlen",
     type=int,
     default=0,
     help="Minimum sequence length to consider for prediction."
-    + " Default: all sequences length are considered",
+    + " Default: 0 (Sequence are not filtered).",
 )
 parser.add_argument(
     "--ndup",
     type=int,
     default=1,
-    help="Minimum number of sequence occurence for sequence to be considered"
-    + " .Default: 1",
+    help="Minimum number of sequence occurence"
+    + " for a sequence to be considered. Default: 1.",
 )
 parser.add_argument(
     "--all",
     action="store_true",
-    help="Display unpredicted sequence in output",
+    help="Display sequence without hits in output. Default: False.",
 )
 parser.add_argument(
     "--graph",
     action="store_true",
-    help="Create donut graph of predicted sequences",
+    help="Create a donut graph of predicted sequences.",
 )
 parser.add_argument(
     "--cpus",
     type=int,
     default=1,
-    help="Specify the number of threads. Default: 1",
+    help="Specify the number of threads. Default: 1.",
 )
 parser.add_argument(
     "--force",
     action="store_true",
-    help="Force re-use output directory. Default: False",
+    help="Force re-use output directory. Default: Off.",
 )
 parser.add_argument(
     "--quiet", action="store_true", help="Decrease program verbosity"
@@ -150,6 +156,20 @@ def main():
     msg(f"Localtime is {datetime.now().strftime('%H:%M:%S')}")
     msg(f"You are {user}")
     msg(f"Operating system is {platform.system()}")
+
+    # Handling number of cpus -----------------------------------------------
+    cpus = args.cpus
+    msg(f"System has {cpus} cores")
+
+    if args.cpus == 0:
+        cpus = os.cpu_count()
+    elif args.cpus > os.cpu_count():
+        msg(
+            f"Option --cpus asked for {args.cpus} cores,"
+            + f" but system has only {os.cpu_count()}."
+        )
+        cpus = os.cpu_count()
+    msg(f"We will use maximum of {cpus} cores.")
 
     # Verify presence of needed tools ---------------------------------------
     needed_tools = ("hmmsearch", "pfscanV3")
@@ -271,11 +291,18 @@ def main():
     # If --ndup is specified, get sequence ids of duplicate sequence.
     if args.ndup != 1:
         seqids = get_dup_seqs(infile, seqids, args.ndup)
-        msg(
-            f"Input file contains {len(seqids)}"
-            + f" sequences with at least {args.ndup} occurences."
-            + " Only these sequences will be used for prediction."
-        )
+        if args.mlen == 0:
+            msg(
+                f"Input file contains {len(seqids)}"
+                + f" sequences with at least {args.ndup} occurences."
+                + " Only these sequences will be used for prediction."
+            )
+        elif args.mlen != 0:
+            msg(
+                f"And from them we have {len(seqids)} sequences"
+                + f" with at least {args.ndup} occurences."
+                + " Only these sequences will be used for prediction."
+            )
 
     # Create a fasta file of sequence after filtering
     with open(pathlib.Path(args.out, "filtfa.fa"), "w") as fih:
@@ -290,7 +317,7 @@ def main():
         [
             "hmmsearch",
             "--cpu",
-            str(args.cpus),
+            str(cpus),
             "-E",
             "0.1",
             "--noali",
@@ -322,7 +349,7 @@ def main():
         [
             "pfscanV3",
             "--nthreads",
-            str(args.cpus),
+            str(cpus),
             "-o",
             "7",
             pathlib.Path(dbdir, "conodictor.pssm"),
@@ -369,7 +396,10 @@ def main():
             finalfam[sid].extend(["UNKOWN", "UNKOWN", "UNKNOWN"])
 
     outfile = open(pathlib.Path(args.out, "summary.txt"), "a")
-    outfile.write("sequence\thmm_pred\tpssm_pred\tdefinitive_pred\n")
+    outfile.write(
+        "sequence\tlength\tnum_cysteines\t"
+        + "hmm_pred\tpssm_pred\tdefinitive_pred\n"
+    )
     if not args.all:
         uniq_final = {
             k: v
@@ -378,11 +408,17 @@ def main():
             is False
         }
         for uk, uv in uniq_final.items():
-            outfile.write(f"{uk}\t{uv[0]}\t{uv[1]}\t{uv[2]}\n")
+            outfile.write(
+                f"{uk}\t{get_stats(uk, infile)[0]}\t"
+                + f"{get_stats(uk, infile)[1]}\t{uv[0]}\t{uv[1]}\t{uv[2]}\n"
+            )
         outfile.close()
     else:
         for k, v in finalfam.items():
-            outfile.write(f"{k}\t{v[0]}\t{v[1]}\t{v[2]}\n")
+            outfile.write(
+                f"{k}\t\t{get_stats(k, infile)[0]}\t"
+                + f"{get_stats(k, infile)[1]}\t{v[0]}\t{v[1]}\t{v[2]}\n"
+            )
         outfile.close()
     msg("Done with writing output.")
 
@@ -392,7 +428,7 @@ def main():
     os.remove(pathlib.Path(args.out, "out.pssm"))
     os.remove(pathlib.Path(f"{args.seqs}.fxi"))
     os.remove(pathlib.Path(f"{inpath}.fxi"))
-    # os.remove(pathlib.Path(args.out, "filtfa.fa"))
+    os.remove(pathlib.Path(args.out, "filtfa.fa"))
 
     msg("Classification finished successfully.")
 
@@ -413,6 +449,31 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
+def get_seq_occur(id, infile):
+    seq_counts = Counter(str(infile[id].seq))
+    count_repeats = Counter(seq_counts.values())
+    repeat = count_repeats.most_common()[0][1]
+
+    return repeat
+
+
+def get_stats(id, infile):
+    """
+    get_stats return general information on sequences provided by
+    sequence ids.
+
+    :id: Input sequence id list.
+    """
+    stats = []
+
+    # Sequence length
+    stats.append(len(infile[id]))
+    # Number of cysteines in sequence
+    stats.append(infile[id].seq.count("C"))
+
+    return stats
+
+
 def get_dup_seqs(infile, idslist, mnoc):
     """
     get_dup_seqs search provided fasta file for duplicate sequence.
@@ -429,17 +490,28 @@ def get_dup_seqs(infile, idslist, mnoc):
     for id in idslist:
         seqdict[id] = infile[id].seq
 
-    for key, value in seqdict.items():
-        if value not in flipped:
-            flipped[value] = [key]
-        else:
-            flipped[value].append(key)
+    flipped = _flip_dict(seqdict)
 
     for v in flipped.values():
         if len(v) >= mnoc:
             dupid.extend(v)
 
     return dupid
+
+
+def _flip_dict(mydict):
+    """
+    Return a flipped dict of input dict
+    """
+
+    flipped_ = defaultdict(list)
+    for k, v in mydict.items():
+        if v not in flipped_:
+            flipped_[v] = [k]
+        else:
+            flipped_[v].append(k)
+
+    return flipped_
 
 
 def donut_graph():
