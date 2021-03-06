@@ -5,8 +5,8 @@ FROM ubuntu:20.04
 LABEL base.image="ubuntu:20.04"
 LABEL version="1"
 LABEL software="conodictor"
-LABEL software.version="2.1.3"
-LABEL description="Prediction of conopeptides superfamily from transcriptome."
+LABEL software.version="2.2.0"
+LABEL description="Prediction of conopeptides superfamily from cone snail venom transcriptome."
 LABEL website="https://github.com/koualab/conodictor"
 LABEL license="https://github.com/koualab/conodictor/blob/master/LICENSE"
 LABEL maintainer="Anicet Ebou"
@@ -58,6 +58,7 @@ RUN git clone --depth=1 https://github.com/koualab/conodictor.git && \
 
 # add pfscan to path
 ENV PATH="$PATH:/var/lib/pftools/bin"
+
 # set a writable directory for matplotlib
 ENV MPLCONFIGDIR="/data/.config/matplotlib"
 
