@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 
-# TODO:
-#       1. Text output of run informations
-#       2. New graph function
-
 import argparse
 from Bio import SearchIO
 from Bio.Seq import reverse_complement, translate

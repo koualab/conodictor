@@ -68,24 +68,25 @@ conodictor -h
 usage: conodictor [options] seqs.fa.gz
 
 positional arguments:
-  seqs         Specify input sequences fasta file
+  seqs         Specify input fasta file.
 
 optional arguments:
   -h, --help   show this help message and exit
-  --out OUT    Specify Output directory
-  --mlen MLEN  Minimum sequence length to consider for prediction
-  --all        Display unpredicted sequence in output
-  --graph      Create donut graph of predicted sequences
-  --cpus CPUS  Specify the number of threads
-  --force      Force re-use output directory
+  --out OUT    Specify output folder.
+  --mlen MLEN  Minimum sequence length to consider for prediction.
+  --ndup NDUP  Minimum number of sequence occurence for a sequence to be
+               considered.
+  --all        Display sequence without hits in output. Default: False.
+  --cpus CPUS  Specify the number of threads. Default: 1.
+  --force      Force re-use output directory. Default: Off.
   --quiet      Decrease program verbosity
   --debug      Activate debug mode
 
-Version:   2.1.4
+Version:   2.2.0
 Licence:   GPL-3
 Homepage:  https://github.com/koualab/conodictor.git
 Author:    Anicet Ebou <anicet.ebou@gmail.com>
-Last Run:  Tue, 02 Mar 2021 21:06:36.
+Last Run:  Sat, 06 Mar 2021 13:26:59.
 ```
 
 
@@ -102,10 +103,10 @@ conodictor seqs.fa.gz
 summary.txt
 
 
-sequence  hmm_pred  pssm_pred definitive_pred
-SEQ_ID_1  A A A
-SEQ_ID_2  B D CONFLICT B and D
-SEQ_ID_3  O1  O1  O1
+sequence  length  num_cysteines occurence hmm_pred  pssm_pred definitive_pred
+SEQ_ID_1  56  4 2 A A A
+SEQ_ID_2  60  0 1 B D CONFLICT B and D
+SEQ_ID_3  145 8 1 O1  O1  O1
 ...
 
 ```
@@ -117,14 +118,13 @@ General:
          seqs          Specify input fasta file [required]
 
 Outputs:
-         --out         Specify output folder name
-         --mlen        Minimum sequence length to consider for prediction. Default: all sequences are considered
-         --all         Add unpredicted sequence in output.
-         --graph       Create donut graph of predicted sequences.
-         --force       Force reuse of output folder
-
+         --out         Specify output folder.
+         --mlen        Minimum sequence length to consider for prediction.
+         --ndup NDUP  Minimum number of sequence occurence for a sequence to be considered.
+         --all        Display sequence without hits in output. Default: False.
+         --force      Force re-use output directory. Default: Off.
 Computation:
-         --cpus        Specify number of threads
+         --cpus        Specify number of threads. Default: 1.
          
 Setup:
          --quiet       Decrease verbosity
