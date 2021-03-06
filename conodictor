@@ -540,7 +540,7 @@ def donut_graph():
     dtc = Counter(plot_data)
     labels = [
         f"{k1}: {v1}"
-        for k1, v1 in dtc.items()
+        for k1, v1 in sorted(dtc.items())
         if not k1.startswith("CONFLICT")
     ]
     values = [x for k2, x in dtc.items() if not k2.startswith("CONFLICT")]
@@ -554,6 +554,7 @@ def donut_graph():
         wedges, labels, loc="center left", bbox_to_anchor=(1, 0, 0.5, 1)
     )
     ax.set_title("ConoDictor Predictions")
+    plt.text(-2.5, -1.5, f"Made with ConoDictor v{VERSION}")
     plt.savefig(
         pathlib.Path(args.out, "superfamilies_distribution.png"), dpi=300
     )

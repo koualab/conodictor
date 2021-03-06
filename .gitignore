@@ -3,3 +3,5 @@ ConoDictor/*
 .venv/*
 .env
 test2/*
+setup.py
+MANIFEST.in
