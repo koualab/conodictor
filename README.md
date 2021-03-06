@@ -36,8 +36,12 @@ singularity exec conodictor.sif conodictor -h
 ### Unix-like operating systems 
 
 ```
-# Download ConoDictor repository and change directory
+# Download ConoDictor latest version
+wget https://github.com/koualab/conodictor/releases/tag/v2.2.0
+
+# or Download ConoDictor development version
 git clone https://github.com/koualab/conodictor.git conodictor
+
 cd conodictor
 
 # Copy conodictor bin folder: Requires admin privileges
@@ -120,9 +124,9 @@ General:
 Outputs:
          --out         Specify output folder.
          --mlen        Minimum sequence length to consider for prediction.
-         --ndup NDUP  Minimum number of sequence occurence for a sequence to be considered.
-         --all        Display sequence without hits in output. Default: False.
-         --force      Force re-use output directory. Default: Off.
+         --ndup        Minimum number of sequence occurence for a sequence to be considered.
+         --all         Display sequence without hits in output. Default: False.
+         --force       Force re-use output directory. Default: Off.
 Computation:
          --cpus        Specify number of threads. Default: 1.
          
