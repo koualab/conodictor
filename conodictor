@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-# TODO: 0. Write function that compute occurence of provided seqids
-#       0.1. Write function to query this counter to avoid to compute
-#            occurence each time if both are merged
+# TODO:
 #       1. Text output of run informations
 #       2. New graph function
 
@@ -17,6 +15,7 @@ from functools import reduce
 import gzip
 from heapq import nsmallest
 from matplotlib import pyplot as plt
+import mmh3
 import numpy as np
 from operator import mul
 import os
@@ -57,16 +56,13 @@ parser.add_argument(
 parser.add_argument(
     "--mlen",
     type=int,
-    default=0,
-    help="Minimum sequence length to consider for prediction."
-    + " Default: 0 (Sequence are not filtered).",
+    help="Minimum sequence length to consider for prediction.",
 )
 parser.add_argument(
     "--ndup",
     type=int,
-    default=1,
     help="Minimum number of sequence occurence"
-    + " for a sequence to be considered. Default: 1.",
+    + " for a sequence to be considered.",
 )
 parser.add_argument(
     "--all",
@@ -159,7 +155,7 @@ def main():
 
     # Handling number of cpus -----------------------------------------------
     cpus = args.cpus
-    msg(f"System has {cpus} cores")
+    msg(f"System has {os.cpu_count()} cores")
 
     if args.cpus == 0:
         cpus = os.cpu_count()
@@ -254,6 +250,7 @@ def main():
             msg("You provided protein fasta file")
             inpath = pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
 
+    # If fasta file is not gzipped
     elif not infa.is_gzip:
         msg("Your file is not gzip compressed")
         if isdnaorproteins(infa[1].seq) == "DNA":
@@ -271,12 +268,12 @@ def main():
             msg("You provided protein fasta file")
             inpath = args.seqs
 
-    # Get sequence keys
+    # Build sequence index and get list of keys -----------------------------
     infile = pyfastx.Fasta(str(inpath))
     seqids = infile.keys()
 
     # If --mlen is specified, filter out sequence with len < mlen.
-    if args.mlen != 0:
+    if args.mlen:
         if infile.count(args.mlen) == 0:
             msg(f"Input file contains 0 sequences with length >= {args.mlen}")
             msg("No sequence will be predicted. Conodictor is stopping...")
@@ -289,26 +286,32 @@ def main():
             seqids = seqids.filter(seqids >= args.mlen)
 
     # If --ndup is specified, get sequence ids of duplicate sequence.
-    if args.ndup != 1:
+    if args.ndup:
         seqids = get_dup_seqs(infile, seqids, args.ndup)
-        if args.mlen == 0:
+        if args.mlen is None:
             msg(
                 f"Input file contains {len(seqids)}"
                 + f" sequences with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
-        elif args.mlen != 0:
+        else:
             msg(
                 f"And from them we have {len(seqids)} sequences"
                 + f" with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
-
     # Create a fasta file of sequence after filtering
-    with open(pathlib.Path(args.out, "filtfa.fa"), "w") as fih:
-        for kid in seqids:
-            fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
-    fih.close()
+    if args.ndup is not None or args.mlen is not None:
+        with open(pathlib.Path(args.out, "filtfa.fa"), "w") as fih:
+            for kid in seqids:
+                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
+        fih.close()
+
+        # Use the filtered file as input of further commands
+        final_file = pathlib.Path(args.out, "filtfa.fa")
+    else:
+        # Use the unfiltered file as input of further commands
+        final_file = infile
 
     # HMMs-------------------------------------------------------------------
     msg("Running HMM prediction")
@@ -324,7 +327,7 @@ def main():
             "-o",
             pathlib.Path(args.out, "out.hmmer"),
             pathlib.Path(dbdir, "conodictor.hmm"),
-            pathlib.Path(args.out, "filtfa.fa"),
+            final_file,
         ]
     )
 
@@ -354,7 +357,7 @@ def main():
             "7",
             pathlib.Path(dbdir, "conodictor.pssm"),
             "-f",
-            pathlib.Path(args.out, "filtfa.fa"),
+            final_file,
         ],
         capture_output=True,
     )
@@ -397,9 +400,12 @@ def main():
 
     outfile = open(pathlib.Path(args.out, "summary.txt"), "a")
     outfile.write(
-        "sequence\tlength\tnum_cysteines\t"
+        "sequence\tlength\tnum_cysteines\toccurence\t"
         + "hmm_pred\tpssm_pred\tdefinitive_pred\n"
     )
+    seq_occur = get_seq_occur(seqids, infile)
+    occur = Counter(seq_occur.values())
+
     if not args.all:
         uniq_final = {
             k: v
@@ -409,15 +415,25 @@ def main():
         }
         for uk, uv in uniq_final.items():
             outfile.write(
-                f"{uk}\t{get_stats(uk, infile)[0]}\t"
-                + f"{get_stats(uk, infile)[1]}\t{uv[0]}\t{uv[1]}\t{uv[2]}\n"
+                f"{uk}\t"  # sequence id
+                + f"{get_stats(uk, infile)[0]}\t"  # sequence length
+                + f"{get_stats(uk, infile)[1]}\t"  # sequence num of cysteines
+                + f"{occur[seq_occur[uk]]}\t"  # seq occ
+                + f"{uv[0]}\t"  # sequence HMM prediction
+                + f"{uv[1]}\t"  # sequence PSSM prediction
+                + f"{uv[2]}\n"  # sequence ConoDictor prediction
             )
         outfile.close()
     else:
         for k, v in finalfam.items():
             outfile.write(
-                f"{k}\t\t{get_stats(k, infile)[0]}\t"
-                + f"{get_stats(k, infile)[1]}\t{v[0]}\t{v[1]}\t{v[2]}\n"
+                f"{k}\t"
+                + f"{get_stats(k, infile)[0]}\t"
+                + f"{get_stats(k, infile)[1]}\t"
+                + f"{occur[seq_occur[k]]}t"
+                + f"{v[0]}\t"
+                + f"{v[1]}\t"
+                + f"{v[2]}\n"
             )
         outfile.close()
     msg("Done with writing output.")
@@ -449,20 +465,31 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
-def get_seq_occur(id, infile):
-    seq_counts = Counter(str(infile[id].seq))
-    count_repeats = Counter(seq_counts.values())
-    repeat = count_repeats.most_common()[0][1]
+def get_seq_occur(ids, infile):
+    """
+    get_seq_occur return a dict of seqid: Murmurhashed sequences at 128
+    bits.
 
-    return repeat
+    :ids: list of sequence ids to consider
+    :infile: file to use to retrieve sequences
+    """
+    # The returned hash will be used to count for sequence occurence.
+    # I opt for this option as the hash will be smaller than a hash
+    # of pure sequences stored in memory in case of a big file.
+
+    seqmmh = defaultdict()
+    for id in ids:
+        seqmmh[id] = mmh3.hash128(infile[id].seq, 47)
+    return seqmmh
 
 
 def get_stats(id, infile):
     """
-    get_stats return general information on sequences provided by
-    sequence ids.
+    get_stats return sequence length and number of cysteines in a sequences
+    for a sequence id.
 
     :id: Input sequence id list.
+    :infile: Fasta file to use to retrieve sequence.
     """
     stats = []
 
