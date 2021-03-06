@@ -70,11 +70,6 @@ parser.add_argument(
     help="Display sequence without hits in output. Default: False.",
 )
 parser.add_argument(
-    "--graph",
-    action="store_true",
-    help="Create a donut graph of predicted sequences.",
-)
-parser.add_argument(
     "--cpus",
     type=int,
     default=1,
@@ -311,7 +306,7 @@ def main():
         final_file = pathlib.Path(args.out, "filtfa.fa")
     else:
         # Use the unfiltered file as input of further commands
-        final_file = infile
+        final_file = inpath
 
     # HMMs-------------------------------------------------------------------
     msg("Running HMM prediction")
@@ -444,16 +439,13 @@ def main():
     os.remove(pathlib.Path(args.out, "out.pssm"))
     os.remove(pathlib.Path(f"{args.seqs}.fxi"))
     os.remove(pathlib.Path(f"{inpath}.fxi"))
-    os.remove(pathlib.Path(args.out, "filtfa.fa"))
+    if args.mlen or args.ndup:
+        os.remove(pathlib.Path(args.out, "filtfa.fa"))
 
     msg("Classification finished successfully.")
-
-    # Creating graph if requested
-    if args.graph:
-        msg("Creating donut plot")
-        donut_graph()
-        msg("Done creating donut plot")
-
+    msg("Creating donut plot")
+    donut_graph()
+    msg("Done creating donut plot")
     msg(f"Check {args.out} folder for results")
     endtime = datetime.now()
     walltime = endtime - startime
@@ -548,7 +540,7 @@ def donut_graph():
     """
 
     data = pd.read_table(pathlib.Path(args.out, "summary.txt"))
-    plot_data = data[data.columns[3]].tolist()
+    plot_data = data[data.columns[6]].tolist()
     dtc = Counter(plot_data)
     labels = [
         f"{k1}: {v1}"
@@ -562,30 +554,9 @@ def donut_graph():
     wedges, _ = ax.pie(
         np.array(values).ravel(), wedgeprops=dict(width=0.5), startangle=-40
     )
-
-    bbox_props = dict(boxstyle="square,pad = 0.3", fc="w", ec="k", lw=0.72)
-    kw = dict(
-        arrowprops=dict(arrowstyle="-"),
-        bbox=bbox_props,
-        zorder=0,
-        va="center",
+    ax.legend(
+        wedges, labels, loc="center left", bbox_to_anchor=(1, 0, 0.5, 1)
     )
-
-    for i, p in enumerate(wedges):
-        ang = (p.theta2 - p.theta1) / 2.0 + p.theta1
-        y = np.sin(np.deg2rad(ang))
-        x = np.cos(np.deg2rad(ang))
-        horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
-        connectionstyle = f"angle, angleA = 0, angleB = {ang}"
-        kw["arrowprops"].update({"connectionstyle": connectionstyle})
-        ax.annotate(
-            labels[i],
-            xy=(x, y),
-            xytext=(1.35 * np.sign(x), 1.4 * y),
-            horizontalalignment=horizontalalignment,
-            **kw,
-        )
-
     ax.set_title("ConoDictor Predictions")
     plt.savefig(
         pathlib.Path(args.out, "superfamilies_distribution.png"), dpi=300
