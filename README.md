@@ -8,6 +8,8 @@ Conopeptides are the main component of cone snails venom. It has proven to have 
 discovery process, ConoDictor predict and classifiy amino acid precursors of conopeptides using
 hidden Markov models and position-specific scoring matrix. 
 
+ConoDictor takes as input either a DNA or proteins fasta file of a cone snail venom duct. 
+
 ## Installation
 
 ### Docker
