@@ -77,16 +77,13 @@ positional arguments:
 optional arguments:
   -h, --help   show this help message and exit
   --out OUT    Specify output folder.
-  --mlen MLEN  Minimum sequence length to consider for prediction.
-  --ndup NDUP  Minimum number of sequence occurence for a sequence to be
-               considered.
   --all        Display sequence without hits in output. Default: False.
   --cpus CPUS  Specify the number of threads. Default: 1.
   --force      Force re-use output directory. Default: Off.
   --quiet      Decrease program verbosity
   --debug      Activate debug mode
 
-Version:   2.2.0
+Version:   2.2.1
 Licence:   GPL-3
 Homepage:  https://github.com/koualab/conodictor.git
 Author:    Anicet Ebou <anicet.ebou@gmail.com>
@@ -107,10 +104,10 @@ conodictor seqs.fa.gz
 summary.txt
 
 
-sequence  length  num_cysteines occurence hmm_pred  pssm_pred definitive_pred
-SEQ_ID_1  56  4 2 A A A
-SEQ_ID_2  60  0 1 B D CONFLICT B and D
-SEQ_ID_3  145 8 1 O1  O1  O1
+sequence  length  num_cysteines hmm_pred  pssm_pred definitive_pred
+SEQ_ID_1  56  4 A A A
+SEQ_ID_2  60  0 B D CONFLICT B and D
+SEQ_ID_3  145 8 O1  O1  O1
 ...
 
 ```
@@ -123,8 +120,6 @@ General:
 
 Outputs:
          --out         Specify output folder.
-         --mlen        Minimum sequence length to consider for prediction.
-         --ndup        Minimum number of sequence occurence for a sequence to be considered.
          --all         Display sequence without hits in output. Default: False.
          --force       Force re-use output directory. Default: Off.
 Computation:
