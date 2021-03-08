@@ -11,7 +11,6 @@ from functools import reduce
 import gzip
 from heapq import nsmallest
 from matplotlib import pyplot as plt
-import mmh3
 import numpy as np
 from operator import mul
 import os
@@ -48,17 +47,6 @@ parser.add_argument(
     type=pathlib.Path,
     default="ConoDictor",
     help="Specify output folder.",
-)
-parser.add_argument(
-    "--mlen",
-    type=int,
-    help="Minimum sequence length to consider for prediction.",
-)
-parser.add_argument(
-    "--ndup",
-    type=int,
-    help="Minimum sequence occurence of a sequence"
-    + " to be considered for prediction.",
 )
 parser.add_argument(
     "--all",
@@ -263,47 +251,6 @@ def main():
     infile = pyfastx.Fasta(str(inpath))
     seqids = infile.keys()
 
-    # If --mlen is specified, filter out sequence with len < mlen.
-    if args.mlen:
-        if infile.count(args.mlen) == 0:
-            msg(f"Input file contains 0 sequences with length >= {args.mlen}")
-            msg("No sequence will be predicted. Conodictor is stopping...")
-            sys.exit(1)
-        else:
-            msg(
-                f"Input file contains {infile.count(args.mlen)}"
-                + f" sequences with length >= {args.mlen}"
-            )
-            seqids = seqids.filter(seqids >= args.mlen)
-
-    # If --ndup is specified, get sequence ids of duplicate sequence.
-    if args.ndup:
-        seqids = get_dup_seqs(infile, seqids, args.ndup)
-        if args.mlen is None:
-            msg(
-                f"Input file contains {len(seqids)}"
-                + f" sequences with at least {args.ndup} occurences."
-                + " Only these sequences will be used for prediction."
-            )
-        else:
-            msg(
-                f"And from them we have {len(seqids)} sequences"
-                + f" with at least {args.ndup} occurences."
-                + " Only these sequences will be used for prediction."
-            )
-    # Create a fasta file of sequence after filtering
-    if args.ndup is not None or args.mlen is not None:
-        with open(pathlib.Path(args.out, "filtfa.fa"), "w") as fih:
-            for kid in seqids:
-                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
-        fih.close()
-
-        # Use the filtered file as input of further commands
-        final_file = pathlib.Path(args.out, "filtfa.fa")
-    else:
-        # Use the unfiltered file as input of further commands
-        final_file = inpath
-
     # HMMs-------------------------------------------------------------------
     msg("Running HMM prediction")
     msg(f"Using hmmsearch v{hmmsearch_version}")
@@ -318,7 +265,7 @@ def main():
             "-o",
             pathlib.Path(args.out, "out.hmmer"),
             pathlib.Path(dbdir, "conodictor.hmm"),
-            final_file,
+            inpath,
         ]
     )
 
@@ -348,7 +295,7 @@ def main():
             "7",
             pathlib.Path(dbdir, "conodictor.pssm"),
             "-f",
-            final_file,
+            inpath,
         ],
         capture_output=True,
     )
@@ -391,11 +338,9 @@ def main():
 
     outfile = open(pathlib.Path(args.out, "summary.txt"), "a")
     outfile.write(
-        "sequence\tlength\tnum_cysteines\toccurence\t"
+        "sequence\tlength\tnum_cysteines\t"
         + "hmm_pred\tpssm_pred\tdefinitive_pred\n"
     )
-    seq_occur = get_seq_occur(seqids, infile)
-    occur = Counter(seq_occur.values())
 
     if not args.all:
         uniq_final = {
@@ -409,7 +354,6 @@ def main():
                 f"{uk}\t"  # sequence id
                 + f"{get_stats(uk, infile)[0]}\t"  # sequence length
                 + f"{get_stats(uk, infile)[1]}\t"  # sequence num of cysteines
-                + f"{occur[seq_occur[uk]]}\t"  # seq occ
                 + f"{uv[0]}\t"  # sequence HMM prediction
                 + f"{uv[1]}\t"  # sequence PSSM prediction
                 + f"{uv[2]}\n"  # sequence ConoDictor prediction
@@ -421,7 +365,6 @@ def main():
                 f"{k}\t"
                 + f"{get_stats(k, infile)[0]}\t"
                 + f"{get_stats(k, infile)[1]}\t"
-                + f"{occur[seq_occur[k]]}t"
                 + f"{v[0]}\t"
                 + f"{v[1]}\t"
                 + f"{v[2]}\n"
@@ -434,9 +377,11 @@ def main():
     os.remove(pathlib.Path(args.out, "out.hmmer"))
     os.remove(pathlib.Path(args.out, "out.pssm"))
     os.remove(pathlib.Path(f"{args.seqs}.fxi"))
-    os.remove(pathlib.Path(f"{inpath}.fxi"))
-    if args.mlen or args.ndup:
+    try:
+        os.remove(pathlib.Path(f"{inpath}.fxi"))
         os.remove(pathlib.Path(args.out, "filtfa.fa"))
+    except OSError:
+        pass
 
     msg("Classification finished successfully.")
     msg("Creating donut plot")
@@ -453,24 +398,6 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
-def get_seq_occur(ids, infile):
-    """
-    get_seq_occur return a dict of seqid: Murmurhashed sequences at 128
-    bits.
-
-    :ids: list of sequence ids to consider
-    :infile: file to use to retrieve sequences
-    """
-    # The returned hash will be used to count for sequence occurence.
-    # I opt for this option as the hash will be smaller than a hash
-    # of pure sequences stored in memory in case of a big file.
-
-    seqmmh = defaultdict()
-    for id in ids:
-        seqmmh[id] = mmh3.hash128(infile[id].seq, 47)
-    return seqmmh
-
-
 def get_stats(id, infile):
     """
     get_stats return sequence length and number of cysteines in a sequences
@@ -489,46 +416,6 @@ def get_stats(id, infile):
     return stats
 
 
-def get_dup_seqs(infile, idslist, mnoc):
-    """
-    get_dup_seqs search provided fasta file for duplicate sequence.
-    Return sequence ids of duplicate sequences.
-
-    :infile: Input fasta file to use for search
-    :idslist: Sequence ids list to consider
-    :mnoc: Minimum number of occurence wanted
-    """
-
-    dupid = []
-    flipped = defaultdict(set)
-    seqdict = defaultdict()
-    for id in idslist:
-        seqdict[id] = infile[id].seq
-
-    flipped = _flip_dict(seqdict)
-
-    for v in flipped.values():
-        if len(v) >= mnoc:
-            dupid.extend(v)
-
-    return dupid
-
-
-def _flip_dict(mydict):
-    """
-    Return a flipped dict of input dict
-    """
-
-    flipped_ = defaultdict(list)
-    for k, v in mydict.items():
-        if v not in flipped_:
-            flipped_[v] = [k]
-        else:
-            flipped_[v].append(k)
-
-    return flipped_
-
-
 def donut_graph():
     """
     donut_graph make a donut graph from outputed stats of
@@ -536,14 +423,16 @@ def donut_graph():
     """
 
     data = pd.read_table(pathlib.Path(args.out, "summary.txt"))
-    plot_data = data[data.columns[6]].tolist()
+    plot_data = data[data.columns[5]].tolist()
     dtc = Counter(plot_data)
     labels = [
         f"{k1}: {v1}"
         for k1, v1 in sorted(dtc.items())
         if not k1.startswith("CONFLICT")
     ]
-    values = [x for k2, x in dtc.items() if not k2.startswith("CONFLICT")]
+    values = [
+        x for k2, x in sorted(dtc.items()) if not k2.startswith("CONFLICT")
+    ]
 
     # White circle
     _, ax = plt.subplots(figsize=(8, 5), subplot_kw=dict(aspect="equal"))
