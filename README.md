@@ -85,10 +85,10 @@ optional arguments:
   --quiet      Decrease program verbosity
   --debug      Activate debug mode
 
-Version:   2.2.1
+Version:   2.2.2
 Licence:   GPL-3
 Homepage:  https://github.com/koualab/conodictor.git
-Author:    Anicet Ebou <anicet.ebou@gmail.com>
+Authors:    Anicet Ebou <anicet.ebou@gmail.com>, Dominique Koua <dominique.koua@inphb.ci>
 Last Run:  Sat, 06 Mar 2021 13:26:59.
 ```
 
@@ -106,10 +106,10 @@ conodictor seqs.fa.gz
 summary.txt
 
 
-sequence  length  num_cysteines hmm_pred  pssm_pred definitive_pred
-SEQ_ID_1  56  4 A A A
-SEQ_ID_2  60  0 B D CONFLICT B and D
-SEQ_ID_3  145 8 O1  O1  O1
+sequence  hmm_pred  pssm_pred definitive_pred
+SEQ_ID_1  A A A
+SEQ_ID_2  B D CONFLICT B and D
+SEQ_ID_3  O1  O1  O1
 ...
 
 ```
@@ -122,6 +122,7 @@ General:
 
 Outputs:
          --out         Specify output folder.
+         --faa         Create a fasta file of matched sequences. Default: False.
          --all         Display sequence without hits in output. Default: False.
          --force       Force re-use output directory. Default: Off.
 Computation:
