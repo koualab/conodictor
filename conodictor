@@ -25,7 +25,10 @@ import subprocess
 import sys
 import warnings
 
-AUTHOR = "Anicet Ebou <anicet.ebou@gmail.com> and Dominique Koua"
+# TODO: Add function to remove duplicates in input sequences.
+#       Update the README
+
+AUTHOR = "Anicet Ebou <anicet.ebou@gmail.com>, Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
 VERSION = "2.2.2"
 
@@ -247,7 +250,7 @@ def main():
             )
             msg("Translation done!")
             inpath = pathlib.Path(
-                args.out, f"{pathlib.Path(args.seqs).stem}_proteins.fa"
+                args.out, f"{pathlib.Path(args.seqs).stem}_allpep.fa"
             )
         elif isdnaorproteins(infa[1].seq) == "protein":
             msg("You provided protein fasta file")
@@ -311,7 +314,9 @@ def main():
     hmmfile.close()
 
     # Compute evalue by family
+    msg("Filtering out artifacts identified by HMMs")
     hmmscore = hmm_threshold(hmmdict)
+    msg("Done filtering")
 
     # Predict sequence family according to HMM
     hmmfam = get_hmm_fam(hmmscore)
@@ -357,7 +362,9 @@ def main():
     pssmfile.close()
 
     # Clear pssmverif from unwanted sequences
+    msg("Filtering out artifacts identified by PSSMs")
     pssmverif = clear_dict(pssmverif)
+    msg("Done filtering")
 
     # Get list of wanted sequences
     goodpssmseq = list(pssmverif.keys())
@@ -465,7 +472,7 @@ def main():
     try:
         os.remove(
             pathlib.Path(
-                args.out, f"{pathlib.Path(args.seqs).stem}_proteins.fa"
+                args.out, f"{pathlib.Path(args.seqs).stem}_allpep.fa"
             )
         )
     except OSError:
@@ -821,7 +828,7 @@ def do_translation(infile, outfile, sw=60):
     """
 
     seqin = pyfastx.Fasta(infile)
-    with open(pathlib.Path(f"{outfile}_proteins.fa"), "w") as protfile:
+    with open(pathlib.Path(f"{outfile}_allpep.fa"), "w") as protfile:
         for sequence in seqin:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")

@@ -14,7 +14,7 @@ ConoDictor takes as input either a DNA or proteins fasta file of a cone snail ve
 
 ### Docker
 
-Accessible at https://hub.docker.com/u/ebedthan
+Accessible at https://hub.docker.com/u/ebedthan or on [BioContainers](https://github.com/BioContainers/containers/tree/master/conodictor/2.2.2).
 
 ```
 docker pull ebedthan/conodictor:latest
