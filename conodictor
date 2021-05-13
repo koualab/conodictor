@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
 
+# ConoDictor: Prediction and classification of conopeptides
+# Copyright (C) 2019-2021  Koualab
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
 import argparse
 from Bio import SearchIO
 from Bio.Seq import reverse_complement, translate
 from collections import Counter, defaultdict
+from colorama import init, Fore
 import csv
 from datetime import datetime
 from decimal import Decimal
@@ -28,6 +43,9 @@ import warnings
 AUTHOR = "Anicet Ebou, Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
 VERSION = "2.2.3"
+
+# Initialise color support --------------------------------------------------
+init(autoreset=True)
 
 # Define start time----------------------------------------------------------
 startime = datetime.now()
@@ -100,16 +118,12 @@ def main():
         dbdir = os.environ["CONODB"]
     except KeyError:
         print(
-            "conodictor: error: Models for predictions not found in $PATH.",
-            file=sys.stderr,
-        )
-        print(
-            "Please set CONODB environment variable to the path "
-            + "where models are stored.",
-            file=sys.stderr,
-        )
-        print(
-            "Visit https://github.com/koualab/conodictor for more",
+            Fore.RED
+            + "[ERROR] Models for predictions not found in $PATH. "
+            + "Please set CONODB environment variable to the path"
+            + "where models are stored."
+            + "Visit https://github.com/koualab/conodictor for more "
+            + "informations.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -121,11 +135,12 @@ def main():
             shutil.rmtree(args.out)
             os.mkdir(args.out)
         else:
-            print("usage: conodictor [options] seqs.fa.gz", file=sys.stderr)
             print(
-                f"conodictor: error: Your choosen output folder '{args.out}'"
+                Fore.RED
+                + f"[ERROR]: Your choosen output folder '{args.out}'"
                 + " already exist!. Please change it using --out option"
-                + " or use --force to reuse it.",
+                + " or use --force to reuse it. "
+                + "Try conodictor -h for more informations.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -140,12 +155,6 @@ def main():
         user = "not telling me who you are"
 
     # Start program ---------------------------------------------------------
-    msg("-----------------------------------------------")
-    msg("conodictor Copyright (C) 2020 - 2021 Koualab")
-    msg("This program comes with ABSOLUTELY NO WARRANTY;")
-    msg("This is free software, and you are welcome to ")
-    msg("redistribute it under certain conditions.")
-    msg("-----------------------------------------------")
     msg(f"This is conodictor {VERSION}")
     msg(f"Written by {AUTHOR}")
     msg(f"Available at {URL}")
@@ -191,16 +200,22 @@ def main():
     if hmmsearch_match[0] and float(hmmsearch_match[0]) > 3:
         hmmsearch_version = hmmsearch_match[0]
     elif hmmsearch_match[0] and float(hmmsearch_match[0]) < 3:
-        raise ValueError(
-            "hmmsearch installed is below 3.0 version, please upgrade"
-            + " at https://hmmer3.org."
+        print(
+            Fore.RED
+            + "[ERROR] hmmsearch installed is below 3.0 version,"
+            + "  please upgrade at https://hmmer3.org.",
+            file=sys.stderr,
         )
+        sys.exit(1)
 
     else:
-        raise ValueError(
-            "Cannot parse HMMER version. Please check it's correctly"
-            + " installed. See https://hmmer3.org."
+        print(
+            Fore.RED
+            + "[ERROR] Cannot parse HMMER version. Please check "
+            + " it's correctly installed. See https://hmmer3.org.",
+            file=sys.stderr,
         )
+        sys.exit(1)
 
     # Input sequence file manipulation---------------------------------------
 
@@ -208,16 +223,17 @@ def main():
     infa = pyfastx.Fasta(args.seqs)
 
     # Test if file type is accepted
-    if isdnaorproteins(infa[1].seq) in ["DNA", "protein"]:
-        pass
-    else:
-        msg(
-            "Your file is not a DNA or protein file, please provide a DNA or"
-            + " protein fasta file"
+    if isdnaorproteins(infa[1].seq) not in ["DNA", "protein"]:
+        print(
+            Fore.RED
+            + "[ERROR] Your file is not a DNA or protein file,"
+            + " please provide a DNA or protein fasta file",
+            file=sys.stderr,
         )
         sys.exit(1)
 
     # Test if file is gziped and translate
+    stem_path = pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
     if infa.is_gzip:
         # Decompress file
         msg("Your file is gzip compressed. Decompressing it.")
@@ -230,17 +246,15 @@ def main():
         msg("Decompression done.")
 
         # Read decompressed file
-        ingzfa = pyfastx.Fasta(
-            str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem))
-        )
+        ingzfa = pyfastx.Fasta(str(stem_path))
 
         # Test if alphabet is DNA, or protein and translate or not
         if isdnaorproteins(ingzfa[1].seq) == "DNA":
             msg("You provided DNA fasta file")
             msg("Translating input sequences")
             do_translation(
-                str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem)),
-                str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem)),
+                str(stem_path),
+                str(stem_path),
             )
             msg("Translation done!")
             inpath = pathlib.Path(
@@ -248,7 +262,7 @@ def main():
             )
         elif isdnaorproteins(ingzfa[1].seq) == "protein":
             msg("You provided protein fasta file")
-            inpath = pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
+            inpath = stem_path
 
     # If fasta file is not gzipped
     elif not infa.is_gzip:
@@ -258,7 +272,7 @@ def main():
             msg("Translating input sequences")
             do_translation(
                 str(pathlib.Path(args.seqs)),
-                str(pathlib.Path(args.out, pathlib.Path(args.seqs).stem)),
+                str(stem_path),
             )
             msg("Translation done!")
             inpath = pathlib.Path(
@@ -276,11 +290,12 @@ def main():
     if args.mlen:
         nb_occur = infile.count(args.mlen)
         if nb_occur == 0:
-            msg(
-                "Input file contains 0 sequences with "
+            print(
+                Fore.RED
+                + "[ERROR] Input file contains 0 sequences with "
                 + f"length >= {args.mlen} bp"
+                + "No sequence will be predicted. Conodictor is stopping..."
             )
-            msg("No sequence will be predicted. Conodictor is stopping...")
             sys.exit(1)
         else:
             msg(
@@ -292,16 +307,16 @@ def main():
     # If --ndup is specified, get sequence ids of duplicate sequence
     dupdata = {}
     if args.ndup:
-        dupdata = get_dup_seqs(infile, seqids, args.ndup)
+        lendupdata = len(get_dup_seqs(infile, seqids, args.ndup))
         if args.mlen is None:
             msg(
-                f"Input file contains {len(dupdata)}"
+                f"Input file contains {lendupdata}"
                 + f" sequences with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
         else:
             msg(
-                f"And from them we have {len(dupdata)} sequences"
+                f"And from them we have {lendupdata} sequences"
                 + f" with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
@@ -375,7 +390,6 @@ def main():
     hmmfile.close()
 
     # Compute evalue by family
-
     hmmscore = hmm_threshold(hmmdict)
 
     # Predict sequence family according to HMM
@@ -989,11 +1003,17 @@ def print_install_tool(tool):
     """
 
     if tool == "hmmsearch":
-        msg(f"{tool} not found. Please visit https://hmmer3.org.")
+        print(
+            Fore.RED
+            + "[ERROR] hmmsearch not found. Please visit https://hmmer3.org.",
+            file=sys.stderr,
+        )
     elif tool == "pfscanV3":
-        msg(
-            f"{tool} not found. Please visit"
-            + "https://github.com/sib-swiss/pftools3."
+        print(
+            Fore.RED
+            + "[ERROR] pfscanV3 not found. Please visit"
+            + "https://github.com/sib-swiss/pftools3.",
+            file=sys.stderr,
         )
 
     sys.exit(1)
@@ -1007,9 +1027,9 @@ def msg(text):
     """
 
     t = datetime.now().strftime("%H:%M:%S")
-    line = f"[{t}] {text}"
+    line = f"[INFO][{t}] {text}"
     if not args.quiet:
-        print(line, file=sys.stderr)
+        print(line, file=sys.stdout)
 
 
 def _translate_seq(seq):
