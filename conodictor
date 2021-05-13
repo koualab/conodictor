@@ -386,6 +386,7 @@ def main():
                     if hit.id in goodhmmseq:
                         hmmdict[hit.id][record.id.split("_")[1]].append(
                             f"{hit.evalue}#{hsp.hit_start}|{hsp.hit_end}"
+                            + f"#{record.id.split('_')[2]}"
                         )
     hmmfile.close()
 
@@ -457,7 +458,6 @@ def main():
                     + f"#{(row[0].split('|')[0]).split('_')[2]}"
                 )
     pssmfile.close()
-    print(pssmseq)
 
     # Predict sequence family according to PSSM
     pssmfam = get_pssm_fam(pssmdict)
@@ -497,6 +497,8 @@ def main():
         is False
     }
 
+    comma = ","
+
     # Enter "reads" mode
     if args.mlen:
         # --faa
@@ -531,8 +533,10 @@ def main():
             ) as freg:
                 freg.write("sequence_id,signal,propeptide,mature\n")
                 for k, v in matched_sequences.items():
-                    freg.write(f"{k}_HMM,{', '.join(v[0])}\n")
-                    freg.write(f"{k}_PSSM,{', '.join(v[1])}\n")
+                    freg.write(f"{k}_HMM,{comma.join(format_to_csv(v[0]))}\n")
+                    freg.write(
+                        f"{k}_PSSM,{comma.join(format_to_csv(v[1]))}\n"
+                    )
             freg.close()
 
         # write summary.txt file with sequence stats
@@ -597,9 +601,12 @@ def main():
                 ),
                 "w",
             ) as freg:
+                freg.write("sequence_id,signal,propeptide,mature\n")
                 for k, v in matched_sequences.items():
-                    freg.write(f"{k}_HMM,{', '.join(v[0])}\n")
-                    freg.write(f"{k}_PSSM,{', '.join(v[1])}\n")
+                    freg.write(f"{k}_HMM,{comma.join(format_to_csv(v[0]))}\n")
+                    freg.write(
+                        f"{k}_PSSM,{comma.join(format_to_csv(v[1]))}\n"
+                    )
             freg.close()
 
         # Open output file for writing
@@ -660,6 +667,21 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
+def format_to_csv(vec):
+    if len(vec) == 1:
+        vec.insert(0, "#SIG")
+        vec.insert(1, "#PRO")
+    elif len(vec) == 2:
+        if vec[0].split("#")[1] == "SIG":
+            vec.insert(1, "#PRO")
+        elif vec[0].split("#")[1] == "PRO":
+            vec.insert(0, "#SIG")
+
+    new_vec = [x.split("#")[0] for x in vec]
+
+    return new_vec
+
+
 def get_stats(id, infile):
     """
     get_stats return sequence length and number of cysteines in a sequences
@@ -891,7 +913,7 @@ def hmm_threshold(mdict):
     score = defaultdict(dict)
     for key in mdict.keys():
         for k, v in mdict[key].items():
-            # v has the format evalue|hsp_start#hsp_end
+            # v has the format evalue|hsp_start#hsp_end#FAM
             score[key][k] = reduce(
                 mul, [Decimal(x.split("#")[0]) for x in v], 1
             )
@@ -927,7 +949,7 @@ def get_pssm_seq(pdict, id, pclass):
                     key=pssm_sorter_func,
                     reverse=True,
                 )
-                pseq.extend([x.split("#")[0] for x in v])
+                pseq.extend([x for x in v])
 
     return pseq
 
@@ -955,11 +977,16 @@ def get_hmm_seq(mydict, mykey, file):
                     a = x.split("#")[1]
                     ml.extend(a.split("|"))
                     fi = [int(b) for b in ml]
+                    fi.append(x.split("#")[2])
                 hsp_id[k] = fi
 
     for k, v in hsp_id.items():
-        v = sorted(v)
-        hspseq = [(file[k].seq)[v[0] : v[-1]]]  # noqa
+        vi = [x for x in v if isinstance(x, int)]
+        vi = sorted(vi)
+        hspseq = [
+            f"{(file[k].seq)[vi[0] : vi[-1]]}"
+            + f"#{[x for x in v if isinstance(x, str)]}"
+        ]  # noqa
 
     return hspseq
 
