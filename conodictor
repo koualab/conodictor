@@ -42,7 +42,7 @@ import warnings
 
 AUTHOR = "Anicet Ebou, Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.2.3"
+VERSION = "2.3.0"
 
 # Initialise color support --------------------------------------------------
 init(autoreset=True)
@@ -52,12 +52,13 @@ startime = datetime.now()
 helptime = datetime.now().strftime("%a, %d %b %Y %H:%M:%S")
 
 # Define command-line arguments----------------------------------------------
+# Top-level parser
 parser = argparse.ArgumentParser(
     prog="conodictor",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     usage="conodictor [options] seqs.fa.gz",
     epilog=f"Version:   {VERSION}\nLicence:   GPL-3\n"
-    + f"Homepage:  {URL}\nAuthors:   {AUTHOR}\nLast Run:  {helptime}.",
+    + f"Homepage:  {URL}\nAuthors:   {AUTHOR}\nLast Run:  {helptime}",
 )
 
 parser.add_argument("seqs", help="Specify input fasta file.")
@@ -114,16 +115,17 @@ args = parser.parse_args()
 
 def main():
     # Handling db directory path specification-------------------------------
+    bindir = pathlib.Path(__file__).resolve().parent
     try:
-        dbdir = os.environ["CONODB"]
+        dbdir = os.environ["CONODB"] or pathlib.Path(bindir, "db")
     except KeyError:
         print(
             Fore.RED
             + "[ERROR] Models for predictions not found in $PATH. "
             + "Please set CONODB environment variable to the path"
             + "where models are stored."
-            + "Visit https://github.com/koualab/conodictor for more "
-            + "informations.",
+            + "Please visit https://github.com/koualab/conodictor "
+            + "for more informations.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -140,7 +142,7 @@ def main():
                 + f"[ERROR]: Your choosen output folder '{args.out}'"
                 + " already exist!. Please change it using --out option"
                 + " or use --force to reuse it. "
-                + "Try conodictor -h for more informations.",
+                + "Do conodictor -h for more informations.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -307,16 +309,16 @@ def main():
     # If --ndup is specified, get sequence ids of duplicate sequence
     dupdata = {}
     if args.ndup:
-        lendupdata = len(get_dup_seqs(infile, seqids, args.ndup))
+        dupdata = get_dup_seqs(infile, seqids, args.ndup)
         if args.mlen is None:
             msg(
-                f"Input file contains {lendupdata}"
+                f"Input file contains {len(dupdata)}"
                 + f" sequences with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
         else:
             msg(
-                f"And from them we have {lendupdata} sequences"
+                f"And from them we have {len(dupdata)} sequences"
                 + f" with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
@@ -352,30 +354,7 @@ def main():
         ]
     )
 
-    # Create two dict:
-    #  - one to filter out grouped match without MAT profile
-    #  - second to create dict for classification based on kept sequences
-    hmmverif = defaultdict(lambda: defaultdict(list))
     hmmdict = defaultdict(lambda: defaultdict(list))
-
-    # First iteration over output file for filtering
-    with open(pathlib.Path(args.out, "out.hmmer")) as hmmfile:
-        for record in SearchIO.parse(hmmfile, "hmmer3-text"):
-            hits = record.hits
-            for hit in hits:
-                hmmverif[hit.id][record.id.split("_")[1]].append(
-                    record.id.split("_")[2]
-                )
-    hmmfile.close()
-
-    if not args.nofilter:
-        # Clear hmmverif from unwanted sequences
-        msg("Filtering out artifacts identified by HMMs")
-        hmmverif = clear_dict(hmmverif)
-        msg("Done filtering")
-
-    # Get list of wanted sequences
-    goodhmmseq = list(hmmverif.keys())
 
     # Second itteration over output file to get evalues and hsps
     with open(pathlib.Path(args.out, "out.hmmer")) as hmmfile:
@@ -383,12 +362,17 @@ def main():
             hits = record.hits
             for hit in hits:
                 for hsp in hit.hsps:
-                    if hit.id in goodhmmseq:
-                        hmmdict[hit.id][record.id.split("_")[1]].append(
-                            f"{hit.evalue}#{hsp.hit_start}|{hsp.hit_end}"
-                            + f"#{record.id.split('_')[2]}"
-                        )
+                    hmmdict[hit.id][record.id.split("_")[1]].append(
+                        f"{hit.evalue}#{hsp.hit_start}|{hsp.hit_end}"
+                        + f"#{record.id.split('_')[2]}"
+                    )
     hmmfile.close()
+
+    if not args.nofilter:
+        # Clear hmmverif from unwanted sequences
+        msg("Filtering out artifacts identified by HMMs")
+        hmmdict = clear_dict(hmmdict, True)
+        msg("Done filtering")
 
     # Compute evalue by family
     hmmscore = hmm_threshold(hmmdict)
@@ -423,15 +407,13 @@ def main():
     # Create two dict:
     #  - one to filter out grouped match without MAT profile
     #  - second to create dict for classification based on kept sequences
-    pssmdict = defaultdict(list)
-    pssmverif = defaultdict(lambda: defaultdict(list))
-    pssmseq = defaultdict(lambda: defaultdict(list))
+    pssmdict = defaultdict(lambda: defaultdict(list))
 
-    # First itteration over output file for filtering
+    # Second itteration over output file to get evalues and hsps
     with open(pathlib.Path(args.out, "out.pssm")) as pssmfile:
         rd = csv.reader(pssmfile, delimiter="\t")
         for row in rd:
-            pssmverif[row[3]][(row[0].split("|")[0]).split("_")[1]].append(
+            pssmdict[row[3]][(row[0].split("|")[0]).split("_")[1]].append(
                 (row[0].split("|")[0]).split("_")[2]
             )
     pssmfile.close()
@@ -439,25 +421,8 @@ def main():
     if not args.nofilter:
         # Clear pssmverif from unwanted sequences
         msg("Filtering out artifacts identified by PSSMs")
-        pssmverif = clear_dict(pssmverif)
+        pssmdict = clear_dict(pssmdict, False)
         msg("Done filtering")
-
-    # Get list of wanted sequences
-    goodpssmseq = list(pssmverif.keys())
-
-    # Second itteration over output file to get evalues and hsps
-    with open(pathlib.Path(args.out, "out.pssm")) as pssmfile:
-        rd = csv.reader(pssmfile, delimiter="\t")
-        for row in rd:
-            if row[3] in goodpssmseq:
-                # Get also the matched sequence outputed by pfscan
-                pssmdict[row[3]].append((row[0].split("|")[0]).split("_")[1])
-
-                pssmseq[row[3]][(row[0].split("|")[0]).split("_")[1]].append(
-                    f"{row[9].replace('-','').upper()}"
-                    + f"#{(row[0].split('|')[0]).split('_')[2]}"
-                )
-    pssmfile.close()
 
     # Predict sequence family according to PSSM
     pssmfam = get_pssm_fam(pssmdict)
@@ -497,48 +462,25 @@ def main():
         is False
     }
 
-    comma = ","
+    if args.faa:
+        # Create dict of matched sequence for future access
+        matched_sequences = {}
+
+        for k, v in uniq_final.items():
+            matched_sequences[get_seq(k, hmmdict, v[0], infile)] = k
+        # Write the fasta file
+        with open(
+            pathlib.Path(
+                args.out, f"{pathlib.Path(args.seqs).stem}_predicted.fa"
+            ),
+            "w",
+        ) as faah:
+            for k, v in matched_sequences.items():
+                faah.write(f">{v}\n{k}\n")
+        faah.close()
 
     # Enter "reads" mode
     if args.mlen:
-        # --faa
-        if args.faa:
-            # Create dict of matched sequence for future access
-            matched_sequences = defaultdict(list)
-
-            for k, v in uniq_final.items():
-                matched_sequences[k] = [
-                    get_hmm_seq(hmmdict, k, infile),
-                    get_pssm_seq(pssmseq, k, v[1]),
-                ]
-
-            # Write the fasta file
-            with open(
-                pathlib.Path(
-                    args.out, f"{pathlib.Path(args.seqs).stem}_predicted.fa"
-                ),
-                "w",
-            ) as faah:
-                for k, v in matched_sequences.items():
-                    faah.write(f">{k}_HMM\n{''.join(v[0])}\n")
-                    faah.write(f">{k}_PSSM\n{''.join(v[1])}\n")
-            faah.close()
-
-            # Write the file of regions matched
-            with open(
-                pathlib.Path(
-                    args.out, f"{pathlib.Path(args.seqs).stem}_regions.csv"
-                ),
-                "w",
-            ) as freg:
-                freg.write("sequence_id,signal,propeptide,mature\n")
-                for k, v in matched_sequences.items():
-                    freg.write(f"{k}_HMM,{comma.join(format_to_csv(v[0]))}\n")
-                    freg.write(
-                        f"{k}_PSSM,{comma.join(format_to_csv(v[1]))}\n"
-                    )
-            freg.close()
-
         # write summary.txt file with sequence stats
         outfile.write(
             "sequence\tlength\tnum_cysteines\toccurence\t"
@@ -554,7 +496,7 @@ def main():
                     + f"{dupdata[uk]}\t"  # seq occ
                     + f"{uv[0]}\t"  # sequence HMM prediction
                     + f"{uv[1]}\t"  # sequence PSSM prediction
-                    + f"{uv[2]}\n"  # sequence ConoDictor prediction
+                    + f"{uv[2]}\n"  # sequence ConoDictor pred
                 )
             outfile.close()
         else:
@@ -572,56 +514,18 @@ def main():
 
     # "Transcriptome mode"
     else:
-        # --faa
-        if args.faa:
-            # Create dict of matched sequence for future access
-            matched_sequences = defaultdict(list)
-
-            for k, v in uniq_final.items():
-                matched_sequences[k] = [
-                    get_hmm_seq(hmmdict, k, infile),
-                    get_pssm_seq(pssmseq, k, v[1]),
-                ]
-
-            with open(
-                pathlib.Path(
-                    args.out, f"{pathlib.Path(args.seqs).stem}_predicted.fa"
-                ),
-                "w",
-            ) as faah:
-                for k, v in matched_sequences.items():
-                    faah.write(f">{k}_HMM\n{''.join(v[0])}\n")
-                    faah.write(f">{k}_PSSM\n{''.join(v[1])}\n")
-            faah.close()
-
-            # Write the file of regions matched
-            with open(
-                pathlib.Path(
-                    args.out, f"{pathlib.Path(args.seqs).stem}_regions.csv"
-                ),
-                "w",
-            ) as freg:
-                freg.write("sequence_id,signal,propeptide,mature\n")
-                for k, v in matched_sequences.items():
-                    freg.write(f"{k}_HMM,{comma.join(format_to_csv(v[0]))}\n")
-                    freg.write(
-                        f"{k}_PSSM,{comma.join(format_to_csv(v[1]))}\n"
-                    )
-            freg.close()
-
         # Open output file for writing
         outfile.write("sequence\thmm_pred\tpssm_pred\tdefinitive_pred\n")
 
-        # Make reporting unclassified sequences optionnal
+        # Make reporting unclassified sequences optional
         if not args.all:
-
             # Write output
             for uk, uv in uniq_final.items():
                 outfile.write(
                     f"{uk}\t"  # sequence id
                     + f"{uv[0]}\t"  # sequence HMM prediction
                     + f"{uv[1]}\t"  # sequence PSSM prediction
-                    + f"{uv[2]}\n"  # sequence ConoDictor prediction
+                    + f"{uv[2]}\n"  # sequence ConoDictor pred
                 )
             outfile.close()
         else:
@@ -667,21 +571,6 @@ def main():
 
 
 # Functions -----------------------------------------------------------------
-def format_to_csv(vec):
-    if len(vec) == 1:
-        vec.insert(0, "#SIG")
-        vec.insert(1, "#PRO")
-    elif len(vec) == 2:
-        if vec[0].split("#")[1] == "SIG":
-            vec.insert(1, "#PRO")
-        elif vec[0].split("#")[1] == "PRO":
-            vec.insert(0, "#SIG")
-
-    new_vec = [x.split("#")[0] for x in vec]
-
-    return new_vec
-
-
 def get_stats(id, infile):
     """
     get_stats return sequence length and number of cysteines in a sequences
@@ -746,7 +635,7 @@ def _flip_dict(mydict):
     return flipped_
 
 
-def clear_dict(hdict):
+def clear_dict(hdict, hmm):
     """
     clear_dict filter out sequences without a MATURE HMM or PSSM profile
     matched by hmmsearch or pfscan. It return the input dict with sequences
@@ -765,10 +654,15 @@ def clear_dict(hdict):
     remove = defaultdict(list)
 
     # Get list of seq without mature sequence match
-    for k in hdict.keys():
-        for a, b in hdict[k].items():
-            if "MAT" not in b:
-                remove[k].append(a)
+    for k, v in hdict.items():
+        for a, b in v.items():
+            if hmm:
+                s = [j.split("#")[2] for j in b]
+                if "MAT" not in s:
+                    remove[k].append(a)
+            else:
+                if "MAT" not in b:
+                    remove[k].append(a)
 
     # Remove families without mature sequence match
     for k, v in remove.items():
@@ -871,7 +765,16 @@ def get_pssm_fam(mdict):
     occurence in PSSM profile match recorded as list for each
     sequence id.
 
-    >>> my_dict = {ID1: ['A', 'A', 'B', 'M'], ID2: ['M', 'P', 'O1', 'O1']}
+    >>> my_dict = {ID1: defaultdict(<class 'list'>,
+                                    { 'A' : ['SIG', 'MAT']},
+                                    {'B': ['MAT']}
+                                    ),
+                   ID2: defaultdict(<class 'list'>,
+                                    {'M': ['MAT']},
+                                    {'P': ['MAT']},
+                                    {'O1': ['PRO', 'MAT']}
+                                    )
+                   }
     >>> get_pssm_fam(my_dict)
     {ID1: 'A', ID2: 'O1'}
 
@@ -888,11 +791,11 @@ def get_pssm_fam(mdict):
         if len(possible_fam) == 1:
             fam = possible_fam[0][0]
         elif len(possible_fam) > 1:
-            if possible_fam[0][1] == possible_fam[1][1]:
+            if len(possible_fam[0][1]) == len(possible_fam[1][1]):
                 fam = (
                     f"CONFLICT {possible_fam[0][0]} and {possible_fam[1][0]}"
                 )
-            elif possible_fam[0][1] > possible_fam[1][1]:
+            elif len(possible_fam[0][1]) > len(possible_fam[1][1]):
                 fam = possible_fam[0][0]
             else:
                 fam = possible_fam[1][0]
@@ -921,74 +824,71 @@ def hmm_threshold(mdict):
     return score
 
 
-def pssm_sorter_func(x):
-    seq, reg = x.split("#")
-    return reg
+def get_seq(seqid, hmmdict, hclass, fastafile):
+
+    seq = ""
+    f = []
+
+    for k in hmmdict.keys():
+        for x, j in hmmdict[k].items():
+            if k == seqid and x == hclass:
+                f.extend(x.split("#")[1].split("|") for x in j)
+                f = [int(item) for sublist in f for item in sublist]
+                seq = fastafile[seqid].seq[min(f) : max(f)]  # noqa
+
+    return extend_seq(fastafile[seqid].seq, seq)
 
 
-def get_pssm_seq(pdict, id, pclass):
-    """
-    get_pssm_seq returns sequence matched by PSSM profile.
-    It take as input the pssmdict created from pfscan output and
-    the id of the sequence wanted along with the final PSSM classification.
+def extend_seq(seq, subseq):
 
-    :pdict: PSSM output file created from pfscan output.
-    :id: sequence id to get matched sequence.
-    :pclass: PSSM classification of desired sequence.
-    """
+    final = ""
 
-    pseq = []
+    stop_in_subseq = subseq.find("*")
 
-    for k in pdict.keys():
-        for x, j in pdict[k].items():
-            if k == id and x == pclass:
-                # sort the regions to have them in the order sig, pro, mat
-                # sig, pro, mat are ordered in reverse order: S > P > M
-                v = sorted(
-                    j,
-                    key=pssm_sorter_func,
-                    reverse=True,
-                )
-                pseq.extend([x for x in v])
+    if stop_in_subseq != -1:
+        ls = subseq[:stop_in_subseq]
+        rs = subseq[stop_in_subseq + 1 :]  # noqa
+        if len(ls) > len(rs):
+            subseq = ls
+        else:
+            subseq = rs
 
-    return pseq
+        final = _extend(seq, subseq)
+
+    else:
+        final = _extend(seq, subseq)
+
+    return final
 
 
-def get_hmm_seq(mydict, mykey, file):
-    """
-    get_hmm_seq returns sequence matched by HMM profile.
-    It take as input the hmmdict created from hmmsearch output and
-    the id of the sequence to retrieve sequence from. It takes also
-    the original fasta file to retrieve sequence from using sequence index.
+def _extend(seq, subseq):
+    fs = ""
+    ind = seq.find(subseq)
 
-    :mydict: Hmmdict created from hmmsearch output
-    :mykey: Sequence id
-    :file: input original file
-    """
+    lstr = seq[:ind]
+    rstr = seq[ind + len(subseq) :]  # noqa
 
-    hsp_id = {}
-    hspseq = []
-    ml = []
+    met = lstr.find("M")
+    stop = lstr.find("*")
+    stopr = rstr.find("*")
 
-    for k in mydict.keys():
-        for mv in mydict[k].values():
-            if k == mykey:
-                for x in mv:
-                    a = x.split("#")[1]
-                    ml.extend(a.split("|"))
-                    fi = [int(b) for b in ml]
-                    fi.append(x.split("#")[2])
-                hsp_id[k] = fi
+    if met > stop:
+        if stopr != -1:
+            fs = seq[met:stopr]
+        else:
+            fs = seq[met:]
+    elif stop > met:
+        if stopr != -1:
+            fs = seq[stop + 1 : stopr]  # noqa
+        else:
+            fs = seq[stop + 1 :]  # noqa
+    else:
+        if stopr != -1:
+            fs = seq[:stopr]
+        else:
+            fs = seq
 
-    for k, v in hsp_id.items():
-        vi = [x for x in v if isinstance(x, int)]
-        vi = sorted(vi)
-        hspseq = [
-            f"{(file[k].seq)[vi[0] : vi[-1]]}"
-            + f"#{[x for x in v if isinstance(x, str)]}"
-        ]  # noqa
-
-    return hspseq
+    return fs
 
 
 def get_hmm_fam(mdict):
