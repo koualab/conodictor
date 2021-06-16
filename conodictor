@@ -40,6 +40,7 @@ import subprocess
 import sys
 import warnings
 
+
 AUTHOR = "Anicet Ebou, Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
 VERSION = "2.3.0"
@@ -362,12 +363,12 @@ def main():
             hits = record.hits
             for hit in hits:
                 for hsp in hit.hsps:
-                    hmmdict[hit.id][record.id.split("_")[1]].append(
+                    hmmdict[hit.id][record.id.split("_")[0]].append(
                         f"{hit.evalue}#{hsp.hit_start}|{hsp.hit_end}"
-                        + f"#{record.id.split('_')[2]}"
+                        + f"#{record.id.split('_')[1]}"
                     )
     hmmfile.close()
-
+    print(hmmdict)
     if not args.nofilter:
         # Clear hmmverif from unwanted sequences
         msg("Filtering out artifacts identified by HMMs")
@@ -413,11 +414,12 @@ def main():
     with open(pathlib.Path(args.out, "out.pssm")) as pssmfile:
         rd = csv.reader(pssmfile, delimiter="\t")
         for row in rd:
+            print(row)
             pssmdict[row[3]][(row[0].split("|")[0]).split("_")[1]].append(
                 (row[0].split("|")[0]).split("_")[2]
             )
     pssmfile.close()
-
+    print(pssmdict)
     if not args.nofilter:
         # Clear pssmverif from unwanted sequences
         msg("Filtering out artifacts identified by PSSMs")
@@ -451,17 +453,16 @@ def main():
             finalfam[sid].extend(["UNKNOWN", pssmfam[sid], pssmfam[sid]])
         else:
             finalfam[sid].extend(["UNKOWN", "UNKOWN", "UNKNOWN"])
-
+    print(finalfam)
     outfile = open(pathlib.Path(args.out, "summary.txt"), "a")
 
     # Get final sequences which has been classified
     uniq_final = {
         k: v
         for k, v in finalfam.items()
-        if bool(set(v).intersection(["UNKNOWN", "UNKNOWN", "UNKNOWN"]))
-        is False
+        if v != ["UNKOWN", "UNKOWN", "UNKNOWN"]
     }
-
+    print(uniq_final)
     if args.faa:
         # Create dict of matched sequence for future access
         matched_sequences = {}
