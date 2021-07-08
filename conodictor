@@ -85,9 +85,9 @@ parser.add_argument(
     help="Create a fasta file of matched sequences. Default: False.",
 )
 parser.add_argument(
-    "--nofilter",
+    "--filter",
     action="store_true",
-    help="Desactivate the signal and pro-regions filter. Default: False.",
+    help="Activate the removal of sequences that matches only the signal and/or proregions. Default: False.",
 )
 parser.add_argument(
     "--all",
@@ -113,6 +113,10 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+# Some variable
+UNKNOWN_FAM = "UNKNOWN"
+CONFLICT_FAM = "CONFLICT"
+
 
 def main():
     # Handling db directory path specification-------------------------------
@@ -120,31 +124,27 @@ def main():
     try:
         dbdir = os.environ["CONODB"] or pathlib.Path(bindir, "db")
     except KeyError:
-        print(
-            Fore.RED
-            + "[ERROR] Models for predictions not found in $PATH. "
+        err(
+            "Models for predictions not found in $PATH. "
             + "Please set CONODB environment variable to the path"
             + "where models are stored."
             + "Please visit https://github.com/koualab/conodictor "
-            + "for more informations.",
-            file=sys.stderr,
+            + "for more informations."
         )
         sys.exit(1)
 
     # Handling output directory creation-------------------------------------
     if os.path.isdir(args.out):
         if args.force:
-            msg(f"Reusing outdir {args.out}")
+            warn(f"Reusing output directory {args.out}")
             shutil.rmtree(args.out)
             os.mkdir(args.out)
         else:
-            print(
-                Fore.RED
-                + f"[ERROR]: Your choosen output folder '{args.out}'"
+            err(
+                f"Your choosen output folder '{args.out}'"
                 + " already exist!. Please change it using --out option"
                 + " or use --force to reuse it. "
-                + "Do conodictor -h for more informations.",
-                file=sys.stderr,
+                + "Do conodictor -h for more informations."
             )
             sys.exit(1)
     else:
@@ -172,7 +172,7 @@ def main():
     if args.cpus == 0:
         cpus = os.cpu_count()
     elif args.cpus > os.cpu_count():
-        msg(
+        warn(
             f"Option --cpus asked for {args.cpus} cores,"
             + f" but system has only {os.cpu_count()}."
         )
@@ -203,20 +203,16 @@ def main():
     if hmmsearch_match[0] and float(hmmsearch_match[0]) > 3:
         hmmsearch_version = hmmsearch_match[0]
     elif hmmsearch_match[0] and float(hmmsearch_match[0]) < 3:
-        print(
-            Fore.RED
-            + "[ERROR] hmmsearch installed is below 3.0 version,"
-            + "  please upgrade at https://hmmer3.org.",
-            file=sys.stderr,
+        err(
+            "hmmsearch installed is below 3.0 version,"
+            + "  please upgrade at https://hmmer3.org."
         )
         sys.exit(1)
 
     else:
-        print(
-            Fore.RED
-            + "[ERROR] Cannot parse HMMER version. Please check "
-            + " it's correctly installed. See https://hmmer3.org.",
-            file=sys.stderr,
+        err(
+            " Cannot parse HMMER version. Please check "
+            + " it's correctly installed. See https://hmmer3.org."
         )
         sys.exit(1)
 
@@ -227,11 +223,9 @@ def main():
 
     # Test if file type is accepted
     if isdnaorproteins(infa[1].seq) not in ["DNA", "protein"]:
-        print(
-            Fore.RED
-            + "[ERROR] Your file is not a DNA or protein file,"
-            + " please provide a DNA or protein fasta file",
-            file=sys.stderr,
+        err(
+            " Your file is not a DNA or protein file,"
+            + " please provide a DNA or protein fasta file"
         )
         sys.exit(1)
 
@@ -293,9 +287,8 @@ def main():
     if args.mlen:
         nb_occur = infile.count(args.mlen)
         if nb_occur == 0:
-            print(
-                Fore.RED
-                + "[ERROR] Input file contains 0 sequences with "
+            err(
+                " Input file contains 0 sequences with "
                 + f"length >= {args.mlen} bp"
                 + "No sequence will be predicted. Conodictor is stopping..."
             )
@@ -357,19 +350,18 @@ def main():
 
     hmmdict = defaultdict(lambda: defaultdict(list))
 
-    # Second itteration over output file to get evalues and hsps
+    # Second iteration over output file to get evalues and hsps
     with open(pathlib.Path(args.out, "out.hmmer")) as hmmfile:
         for record in SearchIO.parse(hmmfile, "hmmer3-text"):
             hits = record.hits
             for hit in hits:
                 for hsp in hit.hsps:
-                    hmmdict[hit.id][record.id.split("_")[0]].append(
+                    hmmdict[hit.id][record.id.split("_")[1]].append(
                         f"{hit.evalue}#{hsp.hit_start}|{hsp.hit_end}"
-                        + f"#{record.id.split('_')[1]}"
+                        + f"#{record.id.split('_')[2]}"
                     )
     hmmfile.close()
-    print(hmmdict)
-    if not args.nofilter:
+    if args.filter:
         # Clear hmmverif from unwanted sequences
         msg("Filtering out artifacts identified by HMMs")
         hmmdict = clear_dict(hmmdict, True)
@@ -414,13 +406,11 @@ def main():
     with open(pathlib.Path(args.out, "out.pssm")) as pssmfile:
         rd = csv.reader(pssmfile, delimiter="\t")
         for row in rd:
-            print(row)
             pssmdict[row[3]][(row[0].split("|")[0]).split("_")[1]].append(
                 (row[0].split("|")[0]).split("_")[2]
             )
     pssmfile.close()
-    print(pssmdict)
-    if not args.nofilter:
+    if args.filter:
         # Clear pssmverif from unwanted sequences
         msg("Filtering out artifacts identified by PSSMs")
         pssmdict = clear_dict(pssmdict, False)
@@ -448,27 +438,24 @@ def main():
                 ]
             )
         elif sid in hmmfam and sid not in pssmfam:
-            finalfam[sid].extend([hmmfam[sid], "UNKNOWN", hmmfam[sid]])
+            finalfam[sid].extend([hmmfam[sid], UNKNOWN_FAM, hmmfam[sid]])
         elif sid in pssmfam and sid not in hmmfam:
-            finalfam[sid].extend(["UNKNOWN", pssmfam[sid], pssmfam[sid]])
+            finalfam[sid].extend([UNKNOWN_FAM, pssmfam[sid], pssmfam[sid]])
         else:
-            finalfam[sid].extend(["UNKOWN", "UNKOWN", "UNKNOWN"])
-    print(finalfam)
-    outfile = open(pathlib.Path(args.out, "summary.txt"), "a")
+            finalfam[sid].extend([UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM])
+    outfile = open(pathlib.Path(args.out, "summary.csv"), "a")
 
     # Get final sequences which has been classified
     uniq_final = {
         k: v
         for k, v in finalfam.items()
-        if v != ["UNKOWN", "UNKOWN", "UNKNOWN"]
+        if v != [UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM]
     }
-    print(uniq_final)
     if args.faa:
         # Create dict of matched sequence for future access
         matched_sequences = {}
-
         for k, v in uniq_final.items():
-            matched_sequences[get_seq(k, hmmdict, v[0], infile)] = k
+            matched_sequences[k] = get_seq(k, hmmdict, v[0], infile)
         # Write the fasta file
         with open(
             pathlib.Path(
@@ -477,38 +464,38 @@ def main():
             "w",
         ) as faah:
             for k, v in matched_sequences.items():
-                faah.write(f">{v}\n{k}\n")
+                faah.write(f">{k}\n{v}\n")
         faah.close()
 
     # Enter "reads" mode
     if args.mlen:
         # write summary.txt file with sequence stats
         outfile.write(
-            "sequence\tlength\tnum_cysteines\toccurence\t"
-            + "hmm_pred\tpssm_pred\tdefinitive_pred\n"
+            "sequence,length,num_cysteines,occurence,"
+            + "hmm_pred,pssm_pred,definitive_pred\n"
         )
 
         if not args.all:
             for uk, uv in uniq_final.items():
                 outfile.write(
-                    f"{uk}\t"  # sequence id
-                    + f"{get_stats(uk, infile)[0]}\t"  # sequence length
-                    + f"{get_stats(uk, infile)[1]}\t"  # sequence nb cysteines
-                    + f"{dupdata[uk]}\t"  # seq occ
-                    + f"{uv[0]}\t"  # sequence HMM prediction
-                    + f"{uv[1]}\t"  # sequence PSSM prediction
+                    f"{uk},"  # sequence id
+                    + f"{get_stats(uk, infile)[0]},"  # sequence length
+                    + f"{get_stats(uk, infile)[1]},"  # sequence nb cysteines
+                    + f"{dupdata[uk]},"  # seq occ
+                    + f"{uv[0]},"  # sequence HMM prediction
+                    + f"{uv[1]},"  # sequence PSSM prediction
                     + f"{uv[2]}\n"  # sequence ConoDictor pred
                 )
             outfile.close()
         else:
             for k, v in finalfam.items():
                 outfile.write(
-                    f"{k}\t"
-                    + f"{get_stats(k, infile)[0]}\t"
-                    + f"{get_stats(k, infile)[1]}\t"
-                    + f"{dupdata[k]}t"
-                    + f"{v[0]}\t"
-                    + f"{v[1]}\t"
+                    f"{k},"
+                    + f"{get_stats(k, infile)[0]},"
+                    + f"{get_stats(k, infile)[1]},"
+                    + f"{dupdata[k]},"
+                    + f"{v[0]},"
+                    + f"{v[1]},"
                     + f"{v[2]}\n"
                 )
             outfile.close()
@@ -516,24 +503,22 @@ def main():
     # "Transcriptome mode"
     else:
         # Open output file for writing
-        outfile.write("sequence\thmm_pred\tpssm_pred\tdefinitive_pred\n")
+        outfile.write("sequence,hmm_pred,pssm_pred,definitive_pred\n")
 
         # Make reporting unclassified sequences optional
         if not args.all:
             # Write output
             for uk, uv in uniq_final.items():
                 outfile.write(
-                    f"{uk}\t"  # sequence id
-                    + f"{uv[0]}\t"  # sequence HMM prediction
-                    + f"{uv[1]}\t"  # sequence PSSM prediction
+                    f"{uk},"  # sequence id
+                    + f"{uv[0]},"  # sequence HMM prediction
+                    + f"{uv[1]},"  # sequence PSSM prediction
                     + f"{uv[2]}\n"  # sequence ConoDictor pred
                 )
             outfile.close()
         else:
             for k, v in finalfam.items():
-                outfile.write(
-                    f"{k}\t" + f"{v[0]}\t" + f"{v[1]}\t" + f"{v[2]}\n"
-                )
+                outfile.write(f"{k},{v[0]},{v[1]},{v[2]}\n")
             outfile.close()
 
     msg("Done with writing output.")
@@ -545,11 +530,6 @@ def main():
         os.remove(pathlib.Path(args.out, "out.pssm"))
         os.remove(pathlib.Path(f"{args.seqs}.fxi"))
         os.remove(pathlib.Path(f"{inpath}.fxi"))
-        os.remove(
-            pathlib.Path(
-                args.out, f"{pathlib.Path(args.seqs).stem}_allpep.fa"
-            )
-        )
         os.remove(pathlib.Path(args.out, "filtfa.fa"))
     except OSError:
         pass
@@ -684,16 +664,16 @@ def donut_graph(ncol):
     predicted sequences.
     """
 
-    data = pd.read_table(pathlib.Path(args.out, "summary.txt"))
+    data = pd.read_csv(pathlib.Path(args.out, "summary.csv"))
     plot_data = data[data.columns[ncol]].tolist()
     dtc = Counter(plot_data)
     labels = [
         f"{k1}: {v1}"
         for k1, v1 in sorted(dtc.items())
-        if not k1.startswith("CONFLICT")
+        if not k1.startswith(CONFLICT_FAM)
     ]
     values = [
-        x for k2, x in sorted(dtc.items()) if not k2.startswith("CONFLICT")
+        x for k2, x in sorted(dtc.items()) if not k2.startswith(CONFLICT_FAM)
     ]
 
     # White circle
@@ -724,17 +704,17 @@ def definitive_prediction(hmmclass, pssmclass):
 
     if hmmclass == pssmclass:
         deffam = hmmclass
-    elif "CONFLICT" in pssmclass and "CONFLICT" in hmmclass:
+    elif CONFLICT_FAM in pssmclass and CONFLICT_FAM in hmmclass:
         fams_pssm = re.search("(?<=CONFLICT)(.*)and(.*)", pssmclass)
         fams_hmm = re.search("(?<=CONFLICT)(.*)and(.*)", hmmclass)
-        deffam = f"CONFLICT {fams_pssm.group(1)}, {fams_pssm.group(2)},"
+        deffam = f"{CONFLICT_FAM} {fams_pssm.group(1)}, {fams_pssm.group(2)},"
         +f" {fams_hmm.group(1)}, and {fams_hmm.group(2)}"
-    elif "CONFLICT" in pssmclass and "CONFLICT" not in hmmclass:
+    elif CONFLICT_FAM in pssmclass and CONFLICT_FAM not in hmmclass:
         deffam = hmmclass
-    elif "CONFLICT" in hmmclass and "CONFLICT" not in pssmclass:
+    elif CONFLICT_FAM in hmmclass and CONFLICT_FAM not in pssmclass:
         deffam = pssmclass
     elif pssmclass != hmmclass:
-        deffam = f"CONFLICT {hmmclass} and {pssmclass}"
+        deffam = f"{CONFLICT_FAM} {hmmclass} and {pssmclass}"
 
     return deffam
 
@@ -793,9 +773,7 @@ def get_pssm_fam(mdict):
             fam = possible_fam[0][0]
         elif len(possible_fam) > 1:
             if len(possible_fam[0][1]) == len(possible_fam[1][1]):
-                fam = (
-                    f"CONFLICT {possible_fam[0][0]} and {possible_fam[1][0]}"
-                )
+                fam = f"{CONFLICT_FAM} {possible_fam[0][0]} and {possible_fam[1][0]}"
             elif len(possible_fam[0][1]) > len(possible_fam[1][1]):
                 fam = possible_fam[0][0]
             else:
@@ -833,63 +811,58 @@ def get_seq(seqid, hmmdict, hclass, fastafile):
     for k in hmmdict.keys():
         for x, j in hmmdict[k].items():
             if k == seqid and x == hclass:
-                f.extend(x.split("#")[1].split("|") for x in j)
+                f.extend(a.split("#")[1].split("|") for a in j)
                 f = [int(item) for sublist in f for item in sublist]
                 seq = fastafile[seqid].seq[min(f) : max(f)]  # noqa
 
-    return extend_seq(fastafile[seqid].seq, seq)
+    return extend(fastafile[seqid].seq, seq)
 
 
-def extend_seq(seq, subseq):
+def extend(seq, pattern):
+    """"""
 
-    final = ""
+    l = 0
+    r = 0
 
-    stop_in_subseq = subseq.find("*")
+    is_stop = pattern.find("*")
 
-    if stop_in_subseq != -1:
-        ls = subseq[:stop_in_subseq]
-        rs = subseq[stop_in_subseq + 1 :]  # noqa
-        if len(ls) > len(rs):
-            subseq = ls
-        else:
-            subseq = rs
+    if is_stop != -1:
+        pattern = pattern[:is_stop]
 
-        final = _extend(seq, subseq)
+    # Search pattern in sequence
+    ind = seq.find(pattern)
 
-    else:
-        final = _extend(seq, subseq)
-
-    return final
-
-
-def _extend(seq, subseq):
-    fs = ""
-    ind = seq.find(subseq)
-
+    # Create left string to search for M or *
     lstr = seq[:ind]
-    rstr = seq[ind + len(subseq) :]  # noqa
 
-    met = lstr.find("M")
-    stop = lstr.find("*")
-    stopr = rstr.find("*")
+    # Find right indice to substr right string
+    rind = ind + len(pattern)
+    rstr = seq[rind:]
 
-    if met > stop:
-        if stopr != -1:
-            fs = seq[met:stopr]
-        else:
-            fs = seq[met:]
-    elif stop > met:
-        if stopr != -1:
-            fs = seq[stop + 1 : stopr]  # noqa
-        else:
-            fs = seq[stop + 1 :]  # noqa
+    # Look for M and * in left string and * in right string
+    rindx = rstr.find("*")
+    lindm = lstr.find("M")
+
+    # Use rindex to find last occurence of *
+    lindx = lstr.rfind("*")
+
+    # Case a Methionine is closer to begin of pattern than a stop
+    if lindm > lindx:
+        l = lindm
+    elif lindm < lindx:
+        # Case a stop is closer to begin of pattern than a methionine
+        l = lindx + 1  # +1 to avoid display of * in sequence
     else:
-        if stopr != -1:
-            fs = seq[:stopr]
-        else:
-            fs = seq
+        l = 0
 
-    return fs
+    if rindx != -1:
+        r = rindx
+    else:
+        r = len(seq)
+
+    extseq = lstr[l:] + pattern + rstr[:r]
+
+    return extseq
 
 
 def get_hmm_fam(mdict):
@@ -931,17 +904,11 @@ def print_install_tool(tool):
     """
 
     if tool == "hmmsearch":
-        print(
-            Fore.RED
-            + "[ERROR] hmmsearch not found. Please visit https://hmmer3.org.",
-            file=sys.stderr,
-        )
+        err("hmmsearch not found. Please visit https://hmmer3.org.")
     elif tool == "pfscanV3":
-        print(
-            Fore.RED
-            + "[ERROR] pfscanV3 not found. Please visit"
-            + "https://github.com/sib-swiss/pftools3.",
-            file=sys.stderr,
+        err(
+            "pfscanV3 not found. Please visit"
+            + "https://github.com/sib-swiss/pftools3."
         )
 
     sys.exit(1)
@@ -949,7 +916,7 @@ def print_install_tool(tool):
 
 def msg(text):
     """
-    msg produce nice message and info output on terminal.
+    msg produces nice message and info output on terminal.
 
     :text: Message to print to STDOUT.
     """
@@ -958,6 +925,32 @@ def msg(text):
     line = f"[INFO][{t}] {text}"
     if not args.quiet:
         print(line, file=sys.stdout)
+
+
+def err(text):
+    """
+    err produces error message printed to stderr.
+
+    :text: Error to print to STDERR.
+    """
+
+    t = datetime.now().strftime("%H:%M:%S")
+    line = f"[ERROR][{t}] {text}"
+
+    print(Fore.RED + line, file=sys.stderr)
+
+
+def warn(text):
+    """
+    warn produces warning message printed to stdout.
+
+    :text: Warning to print to STDOUT.
+    """
+
+    t = datetime.now().strftime("%H:%M:%S")
+    line = f"[WARN][{t}] {text}"
+
+    print(Fore.YELLOW + line)
 
 
 def _translate_seq(seq):
