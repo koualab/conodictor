@@ -1,14 +1,20 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-# ConoDictor: improved prediction and classification of conopeptides
+
+<h1 align="center">
+  ConoDictor
+</h1>
+<h3 align="center">
+  Improved prediction and classification of conopeptides
+</h3>
 
 ## Introduction
 
-Conopeptides are the main component of cone snails venom. It has proven to have diverse pharmaceutical, physiological and therapeutic application. In order to accelerate the drug
-discovery process, ConoDictor predict and classifiy amino acid precursors of conopeptides using
-hidden Markov models and position-specific scoring matrix. 
+Cone snails are among the richest sources of natural peptides with promising pharmacological and therapeutic applications. With the reduced costs of RNAseq, scientists now heavily rely on venom gland transcriptomes for the mining of novel bioactive conopeptides, but the bioinformatic analyses often hamper the discovery process.
 
-ConoDictor takes as input either a DNA or proteins fasta file of a cone snail venom duct. 
+ConoDictor 2 is a standalone and user-friendly command-line program. We have updated the program originally published as a web server 10 years ago using novel and updated tools and algorithms and improved our classification models with new and higher quality sequences. ConoDictor 2 is now more accurate, faster, multiplatform, and able to deal with a whole cone snail venom gland transcriptome (raw reads or contigs) in a very short time. The new version of Conodictor also improves the identification and subsequent classification for entirely novel or relatively distant conopeptides.
+
+The only input ConoDictor 2 requires is the assembled transcriptome or the raw reads file either in DNA or amino acid: used alphabet is automatically recognized. ConoDictor 2 run predictions directly on the proteins file (submitted or dynamically generated) and tries to report the longest conopeptide  precursor-like sequence.
 
 ## Installation
 
@@ -39,7 +45,7 @@ singularity exec conodictor.sif conodictor -h
 
 ```
 # Download ConoDictor latest version
-wget https://github.com/koualab/conodictor/releases/tag/v2.2.0
+wget https://github.com/koualab/conodictor/releases/tag/v2.3.0
 
 # or Download ConoDictor development version
 git clone https://github.com/koualab/conodictor.git conodictor
@@ -71,32 +77,46 @@ conodictor -h
 * Type `conodictor -h` and it should output something like:
 
 ```
-usage: conodictor [options] seqs.fa.gz
+  _____                  _____  _      _             
+ / ____|                |  __ \(_)    | |            
+| |     ___  _ __   ___ | |  | |_  ___| |_ ___  _ __ 
+| |    / _ \| '_ \ / _ \| |  | | |/ __| __/ _ \| '__|
+| |___| (_) | | | | (_) | |__| | | (__| || (_) | |   
+ \_____\___/|_| |_|\___/|_____/|_|\___|\__\___/|_|    v2.3.0
+
+conodictor [FLAGS/OPTIONS] <file>
+Examples:
+	conodictor file.fa.gz
+	conodictor --out outfolder --cpus 4 --mlen 51 file.fa
 
 positional arguments:
-  seqs         Specify input fasta file.
+  file                  Specifies input file.
 
 optional arguments:
-  -h, --help   show this help message and exit
-  --out OUT    Specify output folder.
-  --all        Display sequence without hits in output. Default: False.
-  --cpus CPUS  Specify the number of threads. Default: 1.
-  --force      Force re-use output directory. Default: Off.
-  --quiet      Decrease program verbosity
-  --debug      Activate debug mode
-
-Version:   2.2.2
-Licence:   GPL-3
-Homepage:  https://github.com/koualab/conodictor.git
-Authors:    Anicet Ebou <anicet.ebou@gmail.com>, Dominique Koua <dominique.koua@inphb.ci>
-Last Run:  Sat, 06 Mar 2021 13:26:59.
+  -h, --help            show this help message and exit
+  -o OUT, --out OUT     Specify output folder.
+  --mlen MLEN           Set the minimum length of the sequence to be
+                        considered as a match
+  --ndup NDUP           Minimum sequence occurence of a sequence to be
+                        considered
+  --faa                 Create a fasta file of matched sequences. Default:
+                        False.
+  --filter              Activate the removal of sequences that matches only
+                        the signal and/or proregions. Default: False.
+  -a, --all             Display sequence without hits in output. Default:
+                        False.
+  -j CPUS, --cpus CPUS  Specify the number of threads. Default: 1.
+  --force               Force re-use output directory. Default: Off.
+  -q, --quiet           Decrease program verbosity
+  --debug               Activate debug mode
 ```
 
 
 ## Invoking conodictor
 
 ```
-conodictor seqs.fa.gz
+conodictor file.fa.gz
+conodictor --out outfolder --cpus 4 --mlen 51 file.fa
 ```
   
 
@@ -104,7 +124,6 @@ conodictor seqs.fa.gz
 
 ```
 summary.txt
-
 
 sequence  hmm_pred  pssm_pred definitive_pred
 SEQ_ID_1  A A A
@@ -118,19 +137,19 @@ SEQ_ID_3  O1  O1  O1
 
 ```
 General:
-         seqs          Specify input fasta file [required]
+         file              Specify input fasta file [required]
 
 Outputs:
-         --out         Specify output folder.
-         --faa         Create a fasta file of matched sequences. Default: False.
-         --all         Display sequence without hits in output. Default: False.
-         --force       Force re-use output directory. Default: Off.
+         -o, --out         Specify output folder.
+         --faa             Create a fasta file of matched sequences. Default: False.
+         -a, --all         Display sequence without hits in output. Default: False.
+         --force           Force re-use output directory. Default: Off.
 Computation:
-         --cpus        Specify number of threads. Default: 1.
+         -j, --cpus        Specify number of threads. Default: 1.
          
 Setup:
-         --quiet       Decrease verbosity
-         --debug       Activate debug mode
+         -q, --quiet       Decrease verbosity
+         --debug           Activate debug mode
 
 Standard meta-options:
          --help, -h    Print help and exit

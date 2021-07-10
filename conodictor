@@ -50,20 +50,29 @@ init(autoreset=True)
 
 # Define start time----------------------------------------------------------
 startime = datetime.now()
-helptime = datetime.now().strftime("%a, %d %b %Y %H:%M:%S")
 
 # Define command-line arguments----------------------------------------------
 # Top-level parser
 parser = argparse.ArgumentParser(
     prog="conodictor",
     formatter_class=argparse.RawDescriptionHelpFormatter,
-    usage="conodictor [options] seqs.fa.gz",
-    epilog=f"Version:   {VERSION}\nLicence:   GPL-3\n"
-    + f"Homepage:  {URL}\nAuthors:   {AUTHOR}\nLast Run:  {helptime}",
+    usage=f"""
+  _____                  _____  _      _             
+ / ____|                |  __ \(_)    | |            
+| |     ___  _ __   ___ | |  | |_  ___| |_ ___  _ __ 
+| |    / _ \| '_ \ / _ \| |  | | |/ __| __/ _ \| '__|
+| |___| (_) | | | | (_) | |__| | | (__| || (_) | |   
+ \_____\___/|_| |_|\___/|_____/|_|\___|\__\___/|_|    v{VERSION}
+\nconodictor [FLAGS/OPTIONS] <file>
+Examples:
+\tconodictor file.fa.gz
+\tconodictor --out outfolder --cpus 4 --mlen 51 file.fa\n""",
+    epilog=f"Licence:   GPL-3\nHomepage:  {URL}\nAuthors:   {AUTHOR}",
 )
 
-parser.add_argument("seqs", help="Specify input fasta file.")
+parser.add_argument("file", help="Specifies input file.")
 parser.add_argument(
+    "-o",
     "--out",
     type=pathlib.Path,
     default="ConoDictor",
@@ -90,11 +99,13 @@ parser.add_argument(
     help="Activate the removal of sequences that matches only the signal and/or proregions. Default: False.",
 )
 parser.add_argument(
+    "-a",
     "--all",
     action="store_true",
     help="Display sequence without hits in output. Default: False.",
 )
 parser.add_argument(
+    "-j",
     "--cpus",
     type=int,
     default=1,
@@ -106,7 +117,7 @@ parser.add_argument(
     help="Force re-use output directory. Default: Off.",
 )
 parser.add_argument(
-    "--quiet", action="store_true", help="Decrease program verbosity"
+    "-q", "--quiet", action="store_true", help="Decrease program verbosity"
 )
 parser.add_argument(
     "--debug", action="store_true", help="Activate debug mode"
@@ -116,6 +127,8 @@ args = parser.parse_args()
 # Some variable
 UNKNOWN_FAM = "UNKNOWN"
 CONFLICT_FAM = "CONFLICT"
+
+# TODO: Add support for lzma and bz2 files
 
 
 def main():
@@ -128,7 +141,7 @@ def main():
             "Models for predictions not found in $PATH. "
             + "Please set CONODB environment variable to the path"
             + "where models are stored."
-            + "Please visit https://github.com/koualab/conodictor "
+            + "Visit https://github.com/koualab/conodictor "
             + "for more informations."
         )
         sys.exit(1)
@@ -141,10 +154,9 @@ def main():
             os.mkdir(args.out)
         else:
             err(
-                f"Your choosen output folder '{args.out}'"
-                + " already exist!. Please change it using --out option"
-                + " or use --force to reuse it. "
-                + "Do conodictor -h for more informations."
+                f"Your choosen output folder '{args.out}' already exist!"
+                + " Please change it using --out option or use --force"
+                + " to reuse it. "
             )
             sys.exit(1)
     else:
@@ -167,21 +179,21 @@ def main():
 
     # Handling number of cpus -----------------------------------------------
     cpus = args.cpus
-    msg(f"System has {os.cpu_count()} cores")
+    available_cpus = os.cpu_count()
+    msg(f"System has {available_cpus} cores")
 
     if args.cpus == 0:
-        cpus = os.cpu_count()
-    elif args.cpus > os.cpu_count():
+        cpus = available_cpus
+    elif args.cpus > available_cpus:
         warn(
             f"Option --cpus asked for {args.cpus} cores,"
-            + f" but system has only {os.cpu_count()}."
+            + f" but system has only {available_cpus}."
         )
-        cpus = os.cpu_count()
+        cpus = available_cpus
     msg(f"We will use maximum of {cpus} cores.")
 
     # Verify presence of needed tools ---------------------------------------
     needed_tools = ("hmmsearch", "pfscanV3")
-
     for tool in needed_tools:
         if find_executable(tool) is not None:
             msg(f"Found {tool}")
@@ -193,7 +205,6 @@ def main():
     hmmsearch_match = re.findall(
         r"# HMMER\s+(\d+\.\d+)", sub_hmmsearch.stdout.decode("utf-8")
     )
-
     sub_pfscan = subprocess.run(["pfscanV3", "-h"], capture_output=True)
     pfscan_match = re.findall(
         r"Version\s+(\d+\.\d+\.\d+)", sub_pfscan.stdout.decode("utf-8")
@@ -217,9 +228,8 @@ def main():
         sys.exit(1)
 
     # Input sequence file manipulation---------------------------------------
-
     # Open fasta file (build file index)
-    infa = pyfastx.Fasta(args.seqs)
+    infa = pyfastx.Fasta(args.file)
 
     # Test if file type is accepted
     if isdnaorproteins(infa[1].seq) not in ["DNA", "protein"]:
@@ -230,13 +240,13 @@ def main():
         sys.exit(1)
 
     # Test if file is gziped and translate
-    stem_path = pathlib.Path(args.out, pathlib.Path(args.seqs).stem)
+    stem_path = pathlib.Path(args.out, pathlib.Path(args.file).stem)
     if infa.is_gzip:
         # Decompress file
         msg("Your file is gzip compressed. Decompressing it.")
-        with gzip.open(args.seqs, "r") as seqh:
+        with gzip.open(args.file, "r") as seqh:
             with open(
-                pathlib.Path(args.out, pathlib.Path(args.seqs).stem), "wb"
+                pathlib.Path(args.out, pathlib.Path(args.file).stem), "wb"
             ) as seqo:
                 shutil.copyfileobj(seqh, seqo)
             seqo.close()
@@ -255,7 +265,7 @@ def main():
             )
             msg("Translation done!")
             inpath = pathlib.Path(
-                args.out, f"{pathlib.Path(args.seqs).stem}_proteins.fa"
+                args.out, f"{pathlib.Path(args.file).stem}_proteins.fa"
             )
         elif isdnaorproteins(ingzfa[1].seq) == "protein":
             msg("You provided protein fasta file")
@@ -268,16 +278,16 @@ def main():
             msg("You provided DNA fasta file")
             msg("Translating input sequences")
             do_translation(
-                str(pathlib.Path(args.seqs)),
+                str(pathlib.Path(args.file)),
                 str(stem_path),
             )
             msg("Translation done!")
             inpath = pathlib.Path(
-                args.out, f"{pathlib.Path(args.seqs).stem}_allpep.fa"
+                args.out, f"{pathlib.Path(args.file).stem}_allpep.fa"
             )
         elif isdnaorproteins(infa[1].seq) == "protein":
             msg("You provided protein fasta file")
-            inpath = args.seqs
+            inpath = args.file
 
     # Build sequence index and get list of keys -----------------------------
     infile = pyfastx.Fasta(str(inpath))
@@ -459,7 +469,7 @@ def main():
         # Write the fasta file
         with open(
             pathlib.Path(
-                args.out, f"{pathlib.Path(args.seqs).stem}_predicted.fa"
+                args.out, f"{pathlib.Path(args.file).stem}_predicted.fa"
             ),
             "w",
         ) as faah:
@@ -528,7 +538,7 @@ def main():
     try:
         os.remove(pathlib.Path(args.out, "out.hmmer"))
         os.remove(pathlib.Path(args.out, "out.pssm"))
-        os.remove(pathlib.Path(f"{args.seqs}.fxi"))
+        os.remove(pathlib.Path(f"{args.file}.fxi"))
         os.remove(pathlib.Path(f"{inpath}.fxi"))
         os.remove(pathlib.Path(args.out, "filtfa.fa"))
     except OSError:
