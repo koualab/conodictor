@@ -22,7 +22,6 @@ pathspec>=0.8.1
 Pillow>=8.1.2
 pluggy>=0.13.1
 py>=1.10.0
-pycodestyle>=2.6.0
 pyfastx>=0.8.2
 pyflakes>=2.2.0
 pyparsing>=2.4.7

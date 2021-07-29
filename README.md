@@ -12,7 +12,7 @@
 
 Cone snails are among the richest sources of natural peptides with promising pharmacological and therapeutic applications. With the reduced costs of RNAseq, scientists now heavily rely on venom gland transcriptomes for the mining of novel bioactive conopeptides, but the bioinformatic analyses often hamper the discovery process.
 
-ConoDictor 2 is a standalone and user-friendly command-line program. We have updated the program originally published as a web server 10 years ago using novel and updated tools and algorithms and improved our classification models with new and higher quality sequences. ConoDictor 2 is now more accurate, faster, multiplatform, and able to deal with a whole cone snail venom gland transcriptome (raw reads or contigs) in a very short time. The new version of Conodictor also improves the identification and subsequent classification for entirely novel or relatively distant conopeptides.
+ConoDictor 2 is a standalone and user-friendly command-line program. We have updated the program originally published as a web server 10 years ago using novel and updated tools and algorithms and improved our classification models with new and higher quality sequences. ConoDictor 2 is now more accurate, faster, multiplatform, and able to deal with a whole cone snail venom gland transcriptome (raw reads or contigs) in a very short time.
 
 The only input ConoDictor 2 requires is the assembled transcriptome or the raw reads file either in DNA or amino acid: used alphabet is automatically recognized. ConoDictor 2 run predictions directly on the proteins file (submitted or dynamically generated) and tries to report the longest conopeptide  precursor-like sequence.
 
@@ -22,18 +22,27 @@ The only input ConoDictor 2 requires is the assembled transcriptome or the raw r
 
 Accessible at https://hub.docker.com/u/ebedthan or on [BioContainers](https://github.com/BioContainers/containers/tree/master/conodictor/2.2.2).
 
+
+#### Get the container
+
 ```
 docker pull ebedthan/conodictor:latest
 docker run ebedthan/conodictor:latest conodictor -h
-
-# Example of a run
-docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) ebedthan/conodictor:latest conodictor --out /data/outdir /data/input.fa.gz
-
 ```
 
-See https://staph-b.github.io/docker-builds/run_containers/ for more informations about the run.
+#### Example of a run
+
+```
+docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) ebedthan/conodictor:latest conodictor --out /data/outdir /data/input.fa.gz
+```
+
+See https://staph-b.github.io/docker-builds/run_containers/ for more informations on how to properly run a docker container.
+
 
 ### Singularity
+
+The singularity container does not need admin privileges making it
+suitable for university clusters and HPC.
 
 ```
 singularity build conodictor.sif docker://ebedthan/conodictor:latest

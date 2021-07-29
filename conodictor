@@ -63,11 +63,15 @@ parser = argparse.ArgumentParser(
 | |    / _ \| '_ \ / _ \| |  | | |/ __| __/ _ \| '__|
 | |___| (_) | | | | (_) | |__| | | (__| || (_) | |   
  \_____\___/|_| |_|\___/|_____/|_|\___|\__\___/|_|    v{VERSION}
-\nconodictor [FLAGS/OPTIONS] <file>
-Examples:
+\nIf you use this software, please cite:
+Dominique Koua, Anicet Ebou, Sébastien Dutertre
+Improved prediction of conopeptide superfamilies with ConoDictor 2.0
+Bioinformatics Advances, 2021;, vbab011, https://doi.org/10.1093/bioadv/vbab011
+\n\nconodictor [FLAGS/OPTIONS] <file>
+\nExamples:
 \tconodictor file.fa.gz
 \tconodictor --out outfolder --cpus 4 --mlen 51 file.fa\n""",
-    epilog=f"Licence:   GPL-3\nHomepage:  {URL}\nAuthors:   {AUTHOR}",
+    epilog=f"Licence:   GPL-3\nHomepage:  {URL}",
 )
 
 parser.add_argument("file", help="Specifies input file.")
