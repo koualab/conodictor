@@ -42,9 +42,11 @@ RUN wget http://eddylab.org/software/hmmer/hmmer.tar.gz && \
 
 
 # installer pftools3
-RUN git clone --depth=1 "https://github.com/sib-swiss/pftools3.git" && \
-    mkdir pftools3/build && \
-    cd pftools3/build  &&\
+RUN wget https://github.com/sib-swiss/pftools3/archive/refs/tags/v3.2.6.tar.gz -O pftools3.tar.gz && \
+    tar -zxf pftools3.tar.gz && \
+    rm pftools3.tar.gz && \
+    mkdir pftools3-3.2.6/build &&\
+    cd pftools3-3.2.6/build  &&\
     cmake .. -DCMAKE_INSTALL_PREFIX:PATH=/var/lib/pftools -DCMAKE_BUILD_TYPE=Release -DUSE_GRAPHICS=OFF -DUSE_PDF=ON && \
     make && \
     make install
