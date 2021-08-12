@@ -43,7 +43,7 @@ import warnings
 
 AUTHOR = "Anicet Ebou, Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 
 # Initialise color support --------------------------------------------------
 init(autoreset=True)

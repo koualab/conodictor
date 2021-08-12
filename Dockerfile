@@ -5,7 +5,7 @@ FROM ubuntu:20.04
 LABEL base.image="ubuntu:20.04"
 LABEL version="1"
 LABEL software="conodictor"
-LABEL software.version="2.3.0"
+LABEL software.version="2.3.1"
 LABEL description="Prediction of conopeptides superfamily from cone snail venom transcriptome."
 LABEL website="https://github.com/koualab/conodictor"
 LABEL license="https://github.com/koualab/conodictor/blob/master/LICENSE"
