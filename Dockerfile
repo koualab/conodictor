@@ -3,7 +3,7 @@ FROM ubuntu:20.04
 
 # metadata
 LABEL base.image="ubuntu:20.04"
-LABEL version="1"
+LABEL version="2"
 LABEL software="conodictor"
 LABEL software.version="2.3.1"
 LABEL description="Prediction of conopeptides superfamily from cone snail venom transcriptome."
