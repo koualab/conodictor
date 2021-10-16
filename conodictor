@@ -17,8 +17,9 @@
 import argparse
 from Bio import SearchIO
 from Bio.Seq import reverse_complement, translate
+import bz2
 from collections import Counter, defaultdict
-from colorama import init, Fore
+import colorlog
 import csv
 from datetime import datetime
 from decimal import Decimal
@@ -26,47 +27,68 @@ from distutils.spawn import find_executable
 from functools import reduce
 import gzip
 from heapq import nsmallest
+import logging
+import lzma
+import math
 from matplotlib import pyplot as plt
 import numpy as np
 from operator import mul
 import os
 import pandas as pd
-import pathlib
+from pathlib import Path
 import platform
+import psutil
 import pyfastx
 import re
 import shutil
 import subprocess
 import sys
+from tqdm import tqdm
 import warnings
-
 
 AUTHOR = "Anicet Ebou, Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.3.1"
+VERSION = "2.3.2"
 
-# Initialise color support --------------------------------------------------
-init(autoreset=True)
+# Some global variables
+UNKNOWN_FAM = "UNKNOWN"
+CONFLICT_FAM = "CONFLICT"
+PSSM_SEQ_ID = 3
+CONOPEP_FAMILY = 0
+CONOPEP_FAMILY_NAME = 1
+PRO_REGION = 2
 
-# Define start time----------------------------------------------------------
-startime = datetime.now()
+try:
+    NO_COLOR = os.environ["NO_COLOR"]
+except KeyError:
+    NO_COLOR = ""
+
+magic_dict = {
+    b"\x1f\x8b": "gz",
+    b"\x42\x5a": "bz2",
+    b"\xfd\x37\x7a\x58\x5a": "lzma",
+}
+
+# TODO: Reduce memory usage by dumping hmm and pssm dict as json and parse from them
 
 # Define command-line arguments----------------------------------------------
 # Top-level parser
+citation = """
+When using this program in your research, please cite
+
+    Koua D., Ebou A. and Dutertre S.,
+    Improved prediction of conopeptide superfamilies with ConoDictor 2.0,
+    Bioinformatics Advances 2021, doi:10.1093/bioadv.vbab011
+"""
+
 parser = argparse.ArgumentParser(
     prog="conodictor",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     usage=f"""
-  _____                  _____  _      _             
- / ____|                |  __ \(_)    | |            
-| |     ___  _ __   ___ | |  | |_  ___| |_ ___  _ __ 
-| |    / _ \| '_ \ / _ \| |  | | |/ __| __/ _ \| '__|
-| |___| (_) | | | | (_) | |__| | | (__| || (_) | |   
- \_____\___/|_| |_|\___/|_____/|_|\___|\__\___/|_|    v{VERSION}
-\nIf you use this software, please cite:
-Dominique Koua, Anicet Ebou, Sébastien Dutertre
-Improved prediction of conopeptide superfamilies with ConoDictor 2.0
-Bioinformatics Advances, 2021;, vbab011, https://doi.org/10.1093/bioadv/vbab011
+conodictor v{VERSION}
+\n
+{citation}
+
 \n\nconodictor [FLAGS/OPTIONS] <file>
 \nExamples:
 \tconodictor file.fa.gz
@@ -78,7 +100,7 @@ parser.add_argument("file", help="Specifies input file.")
 parser.add_argument(
     "-o",
     "--out",
-    type=pathlib.Path,
+    type=Path,
     default="ConoDictor",
     help="Specify output folder.",
 )
@@ -99,8 +121,10 @@ parser.add_argument(
 )
 parser.add_argument(
     "--filter",
-    action="store_true",
-    help="Activate the removal of sequences that matches only the signal and/or proregions. Default: False.",
+    type=str,
+    default="pssm",
+    choices=["both", "hmm", "pssm", "no"],
+    help="Activate the removal of sequences that matches only the signal and/or proregions for a method. Default: pssm",
 )
 parser.add_argument(
     "-a",
@@ -126,20 +150,24 @@ parser.add_argument(
 parser.add_argument(
     "--debug", action="store_true", help="Activate debug mode"
 )
+
 args = parser.parse_args()
-
-# Some variable
-UNKNOWN_FAM = "UNKNOWN"
-CONFLICT_FAM = "CONFLICT"
-
-# TODO: Add support for lzma and bz2 files
 
 
 def main():
+    # Define start time----------------------------------------------------------
+    startime = datetime.now()
+
+    # Record memory
+    memory_before = get_process_memory()
+
+    # Instantiate logging
+    setup_logging()
+
     # Handling db directory path specification-------------------------------
-    bindir = pathlib.Path(__file__).resolve().parent
+    bindir = Path(__file__).resolve().parent
     try:
-        dbdir = os.environ["CONODB"] or pathlib.Path(bindir, "db")
+        dbdir = os.environ["CONODB"] or Path(bindir, "db")
     except KeyError:
         err(
             "Models for predictions not found in $PATH. "
@@ -156,6 +184,7 @@ def main():
             warn(f"Reusing output directory {args.out}")
             shutil.rmtree(args.out)
             os.mkdir(args.out)
+            os.mkdir(Path(args.out, "tmp"))
         else:
             err(
                 f"Your choosen output folder '{args.out}' already exist!"
@@ -164,8 +193,10 @@ def main():
             )
             sys.exit(1)
     else:
-        msg(f"Creating output directory {args.out}")
+        msg(f"Creating the output directory {args.out}")
+        print("create")
         os.mkdir(args.out)
+        os.mkdir(Path(args.out, "tmp"))
 
     # Get current user name
     try:
@@ -205,14 +236,7 @@ def main():
             print_install_tool(tool)
 
     # Getting version of tools ----------------------------------------------
-    sub_hmmsearch = subprocess.run(["hmmsearch", "-h"], capture_output=True)
-    hmmsearch_match = re.findall(
-        r"# HMMER\s+(\d+\.\d+)", sub_hmmsearch.stdout.decode("utf-8")
-    )
-    sub_pfscan = subprocess.run(["pfscanV3", "-h"], capture_output=True)
-    pfscan_match = re.findall(
-        r"Version\s+(\d+\.\d+\.\d+)", sub_pfscan.stdout.decode("utf-8")
-    )
+    hmmsearch_match, pfscan_match = get_tools_version()
 
     # Check that version-----------------------------------------------------
     if hmmsearch_match[0] and float(hmmsearch_match[0]) > 3:
@@ -232,66 +256,32 @@ def main():
         sys.exit(1)
 
     # Input sequence file manipulation---------------------------------------
-    # Open fasta file (build file index)
-    infa = pyfastx.Fasta(args.file)
+    # Check if file is compressed and decompress it or return path of uncompressed file
+    file_path = decompress_file(args.file)
 
-    # Test if file type is accepted
-    if isdnaorproteins(infa[1].seq) not in ["DNA", "protein"]:
+    # Open fasta file (build file index)
+    infa = pyfastx.Fasta(str(file_path))
+
+    # Test if alphabet is DNA, or protein and translate or not
+    if isdnaorproteins(infa[0].seq) == "DNA":
+        msg("You provided DNA fasta file")
+        msg("Translating input sequences")
+        do_translation(
+            str(infa),
+            str(file_path),
+        )
+        inpath = Path(f"{file_path}_allpep.fa")
+        DECOMPRESSED_FILE = inpath
+    elif isdnaorproteins(infa[0].seq) == "protein":
+        msg("You provided amino acid fasta file")
+        inpath = file_path
+        DECOMPRESSED_FILE = file_path
+    else:
         err(
-            " Your file is not a DNA or protein file,"
-            + " please provide a DNA or protein fasta file"
+            " Your file is not a DNA or amino acid file,"
+            + " please provide a DNA or amino acid fasta file"
         )
         sys.exit(1)
-
-    # Test if file is gziped and translate
-    stem_path = pathlib.Path(args.out, pathlib.Path(args.file).stem)
-    if infa.is_gzip:
-        # Decompress file
-        msg("Your file is gzip compressed. Decompressing it.")
-        with gzip.open(args.file, "r") as seqh:
-            with open(
-                pathlib.Path(args.out, pathlib.Path(args.file).stem), "wb"
-            ) as seqo:
-                shutil.copyfileobj(seqh, seqo)
-            seqo.close()
-        msg("Decompression done.")
-
-        # Read decompressed file
-        ingzfa = pyfastx.Fasta(str(stem_path))
-
-        # Test if alphabet is DNA, or protein and translate or not
-        if isdnaorproteins(ingzfa[1].seq) == "DNA":
-            msg("You provided DNA fasta file")
-            msg("Translating input sequences")
-            do_translation(
-                str(stem_path),
-                str(stem_path),
-            )
-            msg("Translation done!")
-            inpath = pathlib.Path(
-                args.out, f"{pathlib.Path(args.file).stem}_proteins.fa"
-            )
-        elif isdnaorproteins(ingzfa[1].seq) == "protein":
-            msg("You provided protein fasta file")
-            inpath = stem_path
-
-    # If fasta file is not gzipped
-    elif not infa.is_gzip:
-        msg("Your file is not gzip compressed")
-        if isdnaorproteins(infa[1].seq) == "DNA":
-            msg("You provided DNA fasta file")
-            msg("Translating input sequences")
-            do_translation(
-                str(pathlib.Path(args.file)),
-                str(stem_path),
-            )
-            msg("Translation done!")
-            inpath = pathlib.Path(
-                args.out, f"{pathlib.Path(args.file).stem}_allpep.fa"
-            )
-        elif isdnaorproteins(infa[1].seq) == "protein":
-            msg("You provided protein fasta file")
-            inpath = args.file
 
     # Build sequence index and get list of keys -----------------------------
     infile = pyfastx.Fasta(str(inpath))
@@ -332,13 +322,13 @@ def main():
             )
     # Create a fasta file of sequence after filtering
     if args.ndup is not None or args.mlen is not None:
-        with open(pathlib.Path(args.out, "filtfa.fa"), "w") as fih:
+        with open(Path(args.out, "tmp", "filtfa.fa"), "w") as fih:
             for kid in dupdata.keys():
                 fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
         fih.close()
 
         # Use the filtered file as input of further commands
-        final_file = pathlib.Path(args.out, "filtfa.fa")
+        final_file = Path(args.out, "tmp", "filtfa.fa")
     else:
         # Use the unfiltered file as input of further commands
         final_file = inpath
@@ -347,25 +337,13 @@ def main():
     msg(f"Running HMM prediction using hmmsearch v{hmmsearch_version}")
 
     # Run hmmsearch
-    subprocess.run(
-        [
-            "hmmsearch",
-            "--cpu",
-            str(cpus),
-            "-E",
-            "0.1",
-            "--noali",
-            "-o",
-            pathlib.Path(args.out, "out.hmmer"),
-            pathlib.Path(dbdir, "conodictor.hmm"),
-            final_file,
-        ]
-    )
+    run_HMM(final_file, dbdir, cpus)
 
+    msg("Parsing hmmsearch result")
     hmmdict = defaultdict(lambda: defaultdict(list))
 
     # Second iteration over output file to get evalues and hsps
-    with open(pathlib.Path(args.out, "out.hmmer")) as hmmfile:
+    with open(Path(args.out, "tmp", "out.hmmer")) as hmmfile:
         for record in SearchIO.parse(hmmfile, "hmmer3-text"):
             hits = record.hits
             for hit in hits:
@@ -375,16 +353,18 @@ def main():
                         + f"#{record.id.split('_')[2]}"
                     )
     hmmfile.close()
-    if args.filter:
+
+    if args.filter in ["hmm", "both"]:
         # Clear hmmverif from unwanted sequences
         msg("Filtering out artifacts identified by HMMs")
         hmmdict = clear_dict(hmmdict, True)
-        msg("Done filtering")
 
     # Compute evalue by family
+    msg("Computing compound HMM evalue for each conopeptide family")
     hmmscore = hmm_threshold(hmmdict)
 
     # Predict sequence family according to HMM
+    msg("Predicting sequence family using HMM")
     hmmfam = get_hmm_fam(hmmscore)
 
     msg("Done with HMM prediction")
@@ -392,43 +372,57 @@ def main():
     # PSSMs------------------------------------------------------------------
     msg(f"Running PSSM prediction using pfscan v{pfscan_match[0]}")
 
-    # Run pfscan
-    pssm_run = subprocess.run(
-        [
-            "pfscanV3",
-            "--nthreads",
-            str(cpus),
-            "-o",
-            "7",
-            pathlib.Path(dbdir, "conodictor.pssm"),
-            "-f",
-            final_file,
-        ],
-        capture_output=True,
-    )
+    if len(seqids) > 100000:
+        msg("Input file contains more than 100 000 sequences")
+        msg("Splitting file in chunks to avoid high memory consumption")
+        split_file(str(final_file))
 
-    with open(pathlib.Path(args.out, "out.pssm"), "w") as po:
-        po.write(pssm_run.stdout.decode("utf-8"))
-    po.close()
+        # Run pfscan
+        msg("Running PSSM prediction")
+        subfiles = os.listdir(os.path.join(args.out, "tmp", "file_parts"))
+        out_pssm = open(Path(args.out, "tmp", "out.pssm"), "a")
+        for file in tqdm(
+            subfiles,
+            ascii=True,
+            desc=msg("Running PSMM on each file..."),
+        ):
+            pssm_run = run_PSSM(
+                Path(args.out, "tmp", "file_parts", file), dbdir, cpus
+            )
+            out_pssm.write(pssm_run.stdout.decode("utf-8"))
+        out_pssm.close()
+
+    else:
+        pssm_run = run_PSSM(final_file, dbdir, cpus)
+        msg("Parsing PSSM results")
+        with open(Path(args.out, "tmp", "out.pssm"), "w") as po:
+            po.write(pssm_run.stdout.decode("utf-8"))
+        po.close()
 
     # Create two dict:
     #  - one to filter out grouped match without MAT profile
     #  - second to create dict for classification based on kept sequences
+    msg("Predicting sequences families using PSSMs")
     pssmdict = defaultdict(lambda: defaultdict(list))
 
     # Second itteration over output file to get evalues and hsps
-    with open(pathlib.Path(args.out, "out.pssm")) as pssmfile:
+    with open(Path(args.out, "tmp", "out.pssm")) as pssmfile:
         rd = csv.reader(pssmfile, delimiter="\t")
         for row in rd:
-            pssmdict[row[3]][(row[0].split("|")[0]).split("_")[1]].append(
-                (row[0].split("|")[0]).split("_")[2]
+            pssmdict[row[PSSM_SEQ_ID]][
+                (row[CONOPEP_FAMILY].split("|")[CONOPEP_FAMILY]).split("_")[
+                    CONOPEP_FAMILY_NAME
+                ]
+            ].append(
+                (row[CONOPEP_FAMILY].split("|")[CONOPEP_FAMILY]).split("_")[
+                    PRO_REGION
+                ]
             )
     pssmfile.close()
-    if args.filter:
+    if args.filter in ["pssm", "both"]:
         # Clear pssmverif from unwanted sequences
         msg("Filtering out artifacts identified by PSSMs")
         pssmdict = clear_dict(pssmdict, False)
-        msg("Done filtering")
 
     # Predict sequence family according to PSSM
     pssmfam = get_pssm_fam(pssmdict)
@@ -442,22 +436,18 @@ def main():
     finalfam = defaultdict(list)
 
     # Itterate through all submitted sequence to assign families
+    known_seqs = []
+    known_seqs.extend([*hmmfam])
+    known_seqs.extend([*pssmfam])
+
+    for id in known_seqs:
+        finalfam[id].extend(get_fam_or_unknown(id, hmmfam, pssmfam))
+
     for sid in seqids:
-        if sid in hmmfam and sid in pssmfam:
-            finalfam[sid].extend(
-                [
-                    hmmfam[sid],
-                    pssmfam[sid],
-                    definitive_prediction(hmmfam[sid], pssmfam[sid]),
-                ]
-            )
-        elif sid in hmmfam and sid not in pssmfam:
-            finalfam[sid].extend([hmmfam[sid], UNKNOWN_FAM, hmmfam[sid]])
-        elif sid in pssmfam and sid not in hmmfam:
-            finalfam[sid].extend([UNKNOWN_FAM, pssmfam[sid], pssmfam[sid]])
-        else:
-            finalfam[sid].extend([UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM])
-    outfile = open(pathlib.Path(args.out, "summary.csv"), "a")
+        if sid not in finalfam:
+            finalfam[sid] = [UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM]
+
+    outfile = open(Path(args.out, "summary.csv"), "a")
 
     # Get final sequences which has been classified
     uniq_final = {
@@ -465,6 +455,7 @@ def main():
         for k, v in finalfam.items()
         if v != [UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM]
     }
+
     if args.faa:
         # Create dict of matched sequence for future access
         matched_sequences = {}
@@ -472,9 +463,7 @@ def main():
             matched_sequences[k] = get_seq(k, hmmdict, v[0], infile)
         # Write the fasta file
         with open(
-            pathlib.Path(
-                args.out, f"{pathlib.Path(args.file).stem}_predicted.fa"
-            ),
+            Path(args.out, f"{Path(args.file).stem}_predicted.fa"),
             "w",
         ) as faah:
             for k, v in matched_sequences.items():
@@ -539,12 +528,10 @@ def main():
 
     # Finishing -------------------------------------------------------------
     # Cleaning around ...
+    msg("Cleaning around...")
+    shutil.move("conodictor.log", Path(args.out, "conodictor.log"))
     try:
-        os.remove(pathlib.Path(args.out, "out.hmmer"))
-        os.remove(pathlib.Path(args.out, "out.pssm"))
-        os.remove(pathlib.Path(f"{args.file}.fxi"))
-        os.remove(pathlib.Path(f"{inpath}.fxi"))
-        os.remove(pathlib.Path(args.out, "filtfa.fa"))
+        shutil.rmtree(Path(args.out, "tmp"))
     except OSError:
         pass
 
@@ -556,80 +543,17 @@ def main():
         donut_graph(3)
     msg("Done creating donut plot")
     msg(f"Check {args.out} folder for results")
-    endtime = datetime.now()
-    walltime = endtime - startime
-    msg(f"Walltime used (hh:mm:ss.ms): {walltime}")
+    msg(
+        f"Memory used (RSS in MB): {(get_process_memory() - memory_before)/1000000}"
+    )
+    msg(f"Walltime used (hh:mm:ss.ms): {elapsed_since(startime)}")
     if len(seqids) % 2:
         msg("Nice to have you. Share, enjoy and come back!")
     else:
         msg("Thanks you, come again.")
 
 
-# Functions -----------------------------------------------------------------
-def get_stats(id, infile):
-    """
-    get_stats return sequence length and number of cysteines in a sequences
-    for a sequence id.
-
-    :id: Input sequence id list.
-    :infile: Fasta file to use to retrieve sequence.
-    """
-    stats = []
-
-    # Sequence length
-    stats.append(len(infile[id]))
-    # Number of cysteines in sequence
-    stats.append(infile[id].seq.count("C"))
-
-    return stats
-
-
-def get_dup_seqs(infile, idslist, mnoc):
-    """
-    get_dup_seqs search provided fasta file for duplicate sequence.
-    Return sequence ids of duplicate sequences.
-
-    :infile: Input fasta file to use for search
-    :idslist: Sequence ids list to consider
-    :mnoc: Minimum number of occurence wanted
-    """
-
-    dupid = {}
-    flipped = defaultdict(set)
-    seqdict = defaultdict()
-    for id in idslist:
-        seqdict[id] = infile[id].seq
-
-    flipped = _flip_dict(seqdict)
-
-    # The flipped dict is a dict of list
-    # like: dict = {"ATCT": [id1, id2], "GCTA": [id4, id5]}
-    # returning only the first element of the value
-    # let us consider only one occurence of the sequence
-    # Therefore we will really only predict one sequence
-    # which can have multiple occurence
-    for v in flipped.values():
-        if len(v) >= mnoc:
-            dupid[v[0]] = len(v)
-
-    return dupid
-
-
-def _flip_dict(mydict):
-    """
-    Return a flipped dict of input dict
-    """
-
-    flipped_ = defaultdict(list)
-    for k, v in mydict.items():
-        if v not in flipped_:
-            flipped_[v] = [k]
-        else:
-            flipped_[v].append(k)
-
-    return flipped_
-
-
+# Functions ----------------------------------------------------------------------------------
 def clear_dict(hdict, hmm):
     """
     clear_dict filter out sequences without a MATURE HMM or PSSM profile
@@ -672,37 +596,36 @@ def clear_dict(hdict, hmm):
     return hdict
 
 
-def donut_graph(ncol):
-    """
-    donut_graph make a donut graph from outputed stats of
-    predicted sequences.
-    """
+def decompress_file(filename):
+    file_stem = Path(args.out, "tmp", Path(filename).stem)
+    file_type = get_file_type(filename)
+    file_path = ""
 
-    data = pd.read_csv(pathlib.Path(args.out, "summary.csv"))
-    plot_data = data[data.columns[ncol]].tolist()
-    dtc = Counter(plot_data)
-    labels = [
-        f"{k1}: {v1}"
-        for k1, v1 in sorted(dtc.items())
-        if not k1.startswith(CONFLICT_FAM)
-    ]
-    values = [
-        x for k2, x in sorted(dtc.items()) if not k2.startswith(CONFLICT_FAM)
-    ]
+    if file_type == "gz":
+        msg("Input file is gzip'd")
+        with gzip.open(filename, "r") as seqh:
+            with open(file_stem, "wb") as seqo:
+                shutil.copyfileobj(seqh, seqo)
+            seqo.close()
+            file_path = file_stem
+    elif file_type == "bz2":
+        msg("Input file is bzip'd")
+        with bz2.open(filename, "r") as seqh:
+            with open(file_stem, "wb") as seqo:
+                shutil.copyfileobj(seqh, seqo)
+            seqo.close()
+            file_path = file_stem
+    elif file_type == "lzma":
+        msg("Input file is xz'd")
+        with lzma.open(filename, "r") as seqh:
+            with open(file_stem, "wb") as seqo:
+                shutil.copyfileobj(seqh, seqo)
+            seqo.close()
+            file_path = file_stem
+    else:
+        file_path = filename
 
-    # White circle
-    _, ax = plt.subplots(figsize=(8, 5), subplot_kw=dict(aspect="equal"))
-    wedges, _ = ax.pie(
-        np.array(values).ravel(), wedgeprops=dict(width=0.5), startangle=-40
-    )
-    ax.legend(
-        wedges, labels, loc="center left", bbox_to_anchor=(1, 0, 0.5, 1)
-    )
-    ax.set_title("ConoDictor Predictions")
-    plt.text(-2.5, -1.5, f"Made with ConoDictor v{VERSION}")
-    plt.savefig(
-        pathlib.Path(args.out, "superfamilies_distribution.png"), dpi=300
-    )
+    return file_path
 
 
 def definitive_prediction(hmmclass, pssmclass):
@@ -727,109 +650,88 @@ def definitive_prediction(hmmclass, pssmclass):
         deffam = hmmclass
     elif CONFLICT_FAM in hmmclass and CONFLICT_FAM not in pssmclass:
         deffam = pssmclass
+    elif UNKNOWN_FAM in hmmclass and UNKNOWN_FAM not in pssmclass:
+        deffam = pssmclass
+    elif UNKNOWN_FAM not in hmmclass and UNKNOWN_FAM in pssmclass:
+        deffam = hmmclass
     elif pssmclass != hmmclass:
         deffam = f"{CONFLICT_FAM} {hmmclass} and {pssmclass}"
 
     return deffam
 
 
-def isdnaorproteins(s):
+def do_translation(infile, outfile, sw=60):
     """
-    isdnaorproteins test if input sequence is DNA or proteins.
+    do_translation translate a DNA fasta file into proteins
+    fasta file.
 
-    :s: input sequence
-    """
-
-    dna = "ATCG"
-    prot = "ABCDEFGHIKLMNPQRSTVWYZ*"
-    stype = ""
-
-    if all(i in dna for i in s):
-        stype = "DNA"
-    elif all(i in prot for i in s):
-        stype = "protein"
-    else:
-        stype = "unknown"
-
-    return stype
-
-
-def get_pssm_fam(mdict):
-    """
-    get_pssm_fam return the family with the highest number of
-    occurence in PSSM profile match recorded as list for each
-    sequence id.
-
-    >>> my_dict = {ID1: defaultdict(<class 'list'>,
-                                    { 'A' : ['SIG', 'MAT']},
-                                    {'B': ['MAT']}
-                                    ),
-                   ID2: defaultdict(<class 'list'>,
-                                    {'M': ['MAT']},
-                                    {'P': ['MAT']},
-                                    {'O1': ['PRO', 'MAT']}
-                                    )
-                   }
-    >>> get_pssm_fam(my_dict)
-    {ID1: 'A', ID2: 'O1'}
-
-    :mdict: Dictionnary, required (dict)
+    :infile: Pyfasta object.
+    :outfile: Output file.
+    :sw: Sequence width. Default: 60.
     """
 
-    fam = ""
-    pssmfam = {}
-    for key in mdict.keys():
-        x = Counter(mdict[key])
-        # Take the top 2 item with highest count in list
-        possible_fam = x.most_common(2)
+    with open(Path(f"{outfile}_allpep.fa"), "w") as protfile:
+        for sequence in infile:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                protseq = _translate_seq(sequence.seq)
+                for idx, frame in enumerate(protseq):
+                    # Rule E203 from flacke8 check for extraneous whitespace
+                    # before a colon. But black follow PEP8 rules.
+                    # A PR is open to resolve this issue:
+                    # https://github.com/PyCQA/pycodestyle/pull/914
+                    seq_letters = [
+                        frame[i : i + sw]  # noqa: E203
+                        for i in range(0, len(frame), sw)
+                    ]
+                    nl = "\n"
+                    protfile.write(
+                        f">{sequence.name}_frame={idx + 1}\n"
+                        + f"{nl.join(map(str, seq_letters))}\n"
+                    )
 
-        if len(possible_fam) == 1:
-            fam = possible_fam[0][0]
-        elif len(possible_fam) > 1:
-            if len(possible_fam[0][1]) == len(possible_fam[1][1]):
-                fam = f"{CONFLICT_FAM} {possible_fam[0][0]} and {possible_fam[1][0]}"
-            elif len(possible_fam[0][1]) > len(possible_fam[1][1]):
-                fam = possible_fam[0][0]
-            else:
-                fam = possible_fam[1][0]
 
-        pssmfam[key] = fam
-
-    return pssmfam
-
-
-def hmm_threshold(mdict):
+def donut_graph(ncol):
     """
-    hmm_threshold calculate evalue by family for each sequence
-    and return a dict with the evalue for each family.
-
-    :mdict: Dictionnary, required (dict)
+    donut_graph make a donut graph from outputed stats of
+    predicted sequences.
     """
 
-    score = defaultdict(dict)
-    for key in mdict.keys():
-        for k, v in mdict[key].items():
-            # v has the format evalue|hsp_start#hsp_end#FAM
-            score[key][k] = reduce(
-                mul, [Decimal(x.split("#")[0]) for x in v], 1
-            )
+    data = pd.read_csv(Path(args.out, "summary.csv"))
+    plot_data = data[data.columns[ncol]].tolist()
+    dtc = Counter(plot_data)
+    labels = [
+        f"{k1}: {v1}"
+        for k1, v1 in sorted(dtc.items())
+        if not k1.startswith(CONFLICT_FAM)
+    ]
+    values = [
+        x for k2, x in sorted(dtc.items()) if not k2.startswith(CONFLICT_FAM)
+    ]
 
-    return score
+    # White circle
+    _, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
+    wedges, _ = ax.pie(
+        np.array(values).ravel(), wedgeprops=dict(width=0.5), startangle=-40
+    )
+    ax.legend(
+        wedges, labels, loc="center left", bbox_to_anchor=(1, 0, 0.5, 1)
+    )
+    ax.set_title("ConoDictor Predictions")
+    plt.text(-2, -1.5, f"Made with ConoDictor v{VERSION}")
+    plt.savefig(Path(args.out, "superfamilies_distribution.png"), dpi=300)
 
 
-def get_seq(seqid, hmmdict, hclass, fastafile):
+def elapsed_since(start):
+    walltime = datetime.now() - start
+    return walltime
 
-    seq = ""
-    f = []
 
-    for k in hmmdict.keys():
-        for x, j in hmmdict[k].items():
-            if k == seqid and x == hclass:
-                f.extend(a.split("#")[1].split("|") for a in j)
-                f = [int(item) for sublist in f for item in sublist]
-                seq = fastafile[seqid].seq[min(f) : max(f)]  # noqa
-
-    return extend(fastafile[seqid].seq, seq)
+def err(text):
+    if NO_COLOR == "":
+        colorlog.error(text)
+    elif NO_COLOR != "":
+        logging.error(text)
 
 
 def extend(seq, pattern):
@@ -879,6 +781,64 @@ def extend(seq, pattern):
     return extseq
 
 
+def get_dup_seqs(infile, idslist, mnoc):
+    """
+    get_dup_seqs search provided fasta file for duplicate sequence.
+    Return sequence ids of duplicate sequences.
+
+    :infile: Input fasta file to use for search
+    :idslist: Sequence ids list to consider
+    :mnoc: Minimum number of occurence wanted
+    """
+
+    dupid = {}
+    flipped = defaultdict(set)
+    seqdict = defaultdict()
+    for id in idslist:
+        seqdict[id] = infile[id].seq
+
+    flipped = _flip_dict(seqdict)
+
+    # The flipped dict is a dict of list
+    # like: dict = {"ATCT": [id1, id2], "GCTA": [id4, id5]}
+    # returning only the first element of the value
+    # let us consider only one occurence of the sequence
+    # Therefore we will really only predict one sequence
+    # which can have multiple occurence
+    for v in flipped.values():
+        if len(v) >= mnoc:
+            dupid[v[0]] = len(v)
+
+    return dupid
+
+
+def get_fam_or_unknown(id, hmmfam, pssmfam):
+    fam = []
+    if id in hmmfam:
+        fam.append(hmmfam[id])
+    else:
+        fam.append(UNKNOWN_FAM)
+
+    if id in pssmfam:
+        fam.append(pssmfam[id])
+    else:
+        fam.append(UNKNOWN_FAM)
+
+    fam.append(definitive_prediction(fam[0], fam[1]))
+
+    return fam
+
+
+def get_file_type(filename):
+    max_len = max(len(x) for x in magic_dict)
+    with open(filename, "rb") as f:
+        file_start = f.read(max_len)
+        for magic, filetype in magic_dict.items():
+            if file_start.startswith(magic):
+                return filetype
+        return "uncompressed"
+
+
 def get_hmm_fam(mdict):
     """
     get_hmm_fam get sequence family from hmm dictionnary.
@@ -911,6 +871,155 @@ def get_hmm_fam(mdict):
     return seqfam
 
 
+def get_process_memory():
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    return mem_info.rss
+
+
+def get_pssm_fam(mdict):
+    """
+    get_pssm_fam return the family with the highest number of
+    occurence in PSSM profile match recorded as list for each
+    sequence id.
+
+    >>> my_dict = {ID1: defaultdict(<class 'list'>,
+                                    { 'A' : ['SIG', 'MAT']},
+                                    {'B': ['MAT']}
+                                    ),
+                   ID2: defaultdict(<class 'list'>,
+                                    {'M': ['MAT']},
+                                    {'P': ['MAT']},
+                                    {'O1': ['PRO', 'MAT']}
+                                    )
+                   }
+    >>> get_pssm_fam(my_dict)
+    {ID1: 'A', ID2: 'O1'}
+
+    :mdict: Dictionnary, required (dict)
+    """
+
+    fam = ""
+    pssmfam = {}
+    for key in mdict.keys():
+        x = Counter(mdict[key])
+        # Take the top 2 item with highest count in list
+        possible_fam = x.most_common(2)
+
+        if len(possible_fam) == 1:
+            fam = possible_fam[0][0]
+        elif len(possible_fam) > 1:
+            if len(possible_fam[0][1]) == len(possible_fam[1][1]):
+                fam = f"{CONFLICT_FAM} {possible_fam[0][0]} and {possible_fam[1][0]}"
+            elif len(possible_fam[0][1]) > len(possible_fam[1][1]):
+                fam = possible_fam[0][0]
+            else:
+                fam = possible_fam[1][0]
+
+        pssmfam[key] = fam
+
+    return pssmfam
+
+
+def get_seq(seqid, hmmdict, hclass, fastafile):
+
+    seq = ""
+    f = []
+
+    for k in hmmdict.keys():
+        for x, j in hmmdict[k].items():
+            if k == seqid and x == hclass:
+                f.extend(a.split("#")[1].split("|") for a in j)
+                f = [int(item) for sublist in f for item in sublist]
+                seq = fastafile[seqid].seq[min(f) : max(f)]  # noqa
+
+    return extend(fastafile[seqid].seq, seq)
+
+
+def get_stats(id, infile):
+    """
+    get_stats return sequence length and number of cysteines in a sequences
+    for a sequence id.
+
+    :id: Input sequence id list.
+    :infile: Fasta file to use to retrieve sequence.
+    """
+    stats = []
+
+    # Sequence length
+    stats.append(len(infile[id]))
+    # Number of cysteines in sequence
+    stats.append(infile[id].seq.count("C"))
+
+    return stats
+
+
+def get_tools_version():
+    sub_hmmsearch = subprocess.run(["hmmsearch", "-h"], capture_output=True)
+    hmmsearch_match = re.findall(
+        r"# HMMER\s+(\d+\.\d+)", sub_hmmsearch.stdout.decode("utf-8")
+    )
+    sub_pfscan = subprocess.run(["pfscanV3", "-h"], capture_output=True)
+    pfscan_match = re.findall(
+        r"Version\s+(\d+\.\d+\.\d+)", sub_pfscan.stdout.decode("utf-8")
+    )
+
+    return hmmsearch_match, pfscan_match
+
+
+def hmm_threshold(mdict):
+    """
+    hmm_threshold calculate evalue by family for each sequence
+    and return a dict with the evalue for each family.
+
+    :mdict: Dictionnary, required (dict)
+    """
+
+    score = defaultdict(dict)
+    for key in mdict.keys():
+        for k, v in mdict[key].items():
+            # v has the format evalue|hsp_start#hsp_end#FAM
+            score[key][k] = reduce(
+                mul, [Decimal(x.split("#")[0]) for x in v], 1
+            )
+
+    return score
+
+
+def isdnaorproteins(s):
+    """
+    isdnaorproteins test if input sequence is DNA or proteins.
+
+    :s: input sequence
+    """
+
+    dna = "ATCG"
+    prot = "ABCDEFGHIKLMNPQRSTVWYZ*X"
+    stype = ""
+
+    if all(i in dna for i in s):
+        stype = "DNA"
+    elif all(i in prot for i in s):
+        stype = "protein"
+    else:
+        stype = "unknown"
+
+    return stype
+
+
+def msg(text):
+    """
+    msg produces nice message and info output on terminal.
+
+    :text: Message to print to STDOUT.
+    """
+
+    if not args.quiet and NO_COLOR == "":
+        colorlog.info(text)
+    elif not args.quiet and NO_COLOR != "":
+        logging.info(text)
+
+
 def print_install_tool(tool):
     """
     print_install_tool print useful installation
@@ -928,43 +1037,118 @@ def print_install_tool(tool):
     sys.exit(1)
 
 
-def msg(text):
-    """
-    msg produces nice message and info output on terminal.
+def run_PSSM(file, dbdir, cpus):
+    return subprocess.run(
+        [
+            "pfscanV3",
+            "--nthreads",
+            str(cpus),
+            "-o",
+            "7",
+            Path(dbdir, "conodictor.pssm"),
+            "-f",
+            file,
+        ],
+        capture_output=True,
+    )
 
-    :text: Message to print to STDOUT.
-    """
 
-    t = datetime.now().strftime("%H:%M:%S")
-    line = f"[INFO][{t}] {text}"
-    if not args.quiet:
-        print(line, file=sys.stdout)
+def run_HMM(file, dbdir, cpus):
+    return subprocess.run(
+        [
+            "hmmsearch",
+            "--cpu",
+            str(cpus),
+            "-E",
+            "0.1",
+            "--noali",
+            "-o",
+            Path(args.out, "tmp", "out.hmmer"),
+            Path(dbdir, "conodictor.hmm"),
+            file,
+        ]
+    )
 
 
-def err(text):
-    """
-    err produces error message printed to stderr.
+def setup_logging():
+    # Set up logging to file
+    logging.basicConfig(
+        filename="conodictor.log",
+        format="[%(asctime)s][%(levelname)s] %(message)s (%(filename)s:%(lineno)d)",
+        datefmt="%m-%d-%Y %I:%M:%S",
+        level=logging.INFO,
+    )
 
-    :text: Error to print to STDERR.
-    """
+    # Define a Handler which writes INFO messages or higher to the stderr
+    console = logging.StreamHandler()
+    console.setFormatter(
+        colorlog.ColoredFormatter(
+            "%(log_color)s[%(levelname)s][%(asctime)s] %(message)s",
+            datefmt="%I:%M:%S",
+            log_colors={
+                "DEBUG": "cyan",
+                "INFO": "white",
+                "WARNING": "yellow",
+                "ERROR": "red",
+            },
+        )
+    )
 
-    t = datetime.now().strftime("%H:%M:%S")
-    line = f"[ERROR][{t}] {text}"
+    logging.getLogger("").addHandler(console)
 
-    print(Fore.RED + line, file=sys.stderr)
+
+def split_file(file):
+    infile = pyfastx.Fasta(file)
+    parts_num = math.ceil(len(infile) / 25000)
+    digit = len(str(parts_num))
+    lens = [0] * parts_num
+
+    fhs = []
+    name, suffix1 = os.path.splitext(os.path.basename(file))
+    os.mkdir(os.path.join(args.out, "tmp", "file_parts"))
+
+    for i in range(1, parts_num + 1):
+        subfile = f"{name}.{str(i).zfill(digit)}{suffix1}"
+        subfile = os.path.join(args.out, "tmp", "file_parts", subfile)
+        fh = open(subfile, "w")
+        fhs.append(fh)
+
+    ids = infile.keys()
+    mapping = {}
+
+    for chrom in ids.sort("length", reverse=True):
+        idx = min(range(len(lens)), key=lens.__getitem__)
+
+        mapping[chrom] = idx
+        lens[idx] += len(infile[chrom])
+
+    for seq in infile:
+        fhs[mapping[seq.name]].write(seq.raw)
+
+    for fh in fhs:
+        fh.close()
 
 
 def warn(text):
+    if NO_COLOR == "":
+        colorlog.warning(text)
+    elif NO_COLOR != "":
+        logging.warning(text)
+
+
+def _flip_dict(mydict):
     """
-    warn produces warning message printed to stdout.
-
-    :text: Warning to print to STDOUT.
+    Return a flipped dict of input dict
     """
 
-    t = datetime.now().strftime("%H:%M:%S")
-    line = f"[WARN][{t}] {text}"
+    flipped_ = defaultdict(list)
+    for k, v in mydict.items():
+        if v not in flipped_:
+            flipped_[v] = [k]
+        else:
+            flipped_[v].append(k)
 
-    print(Fore.YELLOW + line)
+    return flipped_
 
 
 def _translate_seq(seq):
@@ -991,40 +1175,11 @@ def _translate_seq(seq):
     return seqlist
 
 
-def do_translation(infile, outfile, sw=60):
-    """
-    do_translation translate a DNA fasta file into proteins
-    fasta file.
-
-    :infile: Input DNA fasta file.
-    :outfile: Output file.
-    :sw: Sequence width. Default: 60.
-    """
-
-    seqin = pyfastx.Fasta(infile)
-    with open(pathlib.Path(f"{outfile}_allpep.fa"), "w") as protfile:
-        for sequence in seqin:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                protseq = _translate_seq(sequence.seq)
-                for idx, frame in enumerate(protseq):
-                    # Rule E203 from flacke8 check for extraneous whitespace
-                    # before a colon. But black follow PEP8 rules.
-                    # A PR is open to resolve this issue:
-                    # https://github.com/PyCQA/pycodestyle/pull/914
-                    seq_letters = [
-                        frame[i : i + sw]  # noqa: E203
-                        for i in range(0, len(frame), sw)
-                    ]
-                    nl = "\n"
-                    protfile.write(
-                        f">{sequence.name}_frame={idx + 1}\n"
-                        + f"{nl.join(map(str, seq_letters))}\n"
-                    )
-
-
 def exception_handler(
-    exception_type, exception, traceback, debug_hook=sys.excepthook
+    exception_type,
+    exception,
+    traceback,
+    debug_hook=sys.excepthook,
 ):
     """
     exception_handler remove default debug info and traceback
@@ -1035,7 +1190,7 @@ def exception_handler(
     if args.debug:
         debug_hook(exception_type, exception, traceback)
     else:
-        msg(f"{exception_type.__name__}, {exception}")
+        logging.debug(f"{exception_type.__name__}, {exception}")
 
 
 sys.excepthook = exception_handler
