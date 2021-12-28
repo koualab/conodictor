@@ -3,7 +3,7 @@ name = "conodictor"
 version = "2.3.2"
 description = "Prediction and classification of conopeptides"
 authors = ["Anicet Ebou <anicet.ebou@gmail.com>, Dominique Koua <dominique.koua@inphb.ci>"]
-maintainers = ["Anicet Ebou <anicet.ebou@gmail.com>]
+maintainers = ["Anicet Ebou <anicet.ebou@gmail.com>"]
 license = "GPL-3.0-only"
 readme = "README.md"
 homepage = "https://github.com/koualab/conodictor"
@@ -24,6 +24,7 @@ classifiers = [
             "Operating System :: Unix",
             "Topic :: Scientific/Engineering :: Bio-Informatics"
 ]
+include = ["db/*"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -35,6 +36,9 @@ pyfastx = "^0.8.4"
 [tool.poetry.dev-dependencies]
 flake8 = "^4.0.1"
 black = "^21.12b0"
+
+[tool.poetry.scripts]
+conodictor = "conodictor.conodictor:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
