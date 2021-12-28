@@ -1,23 +1,40 @@
 [tool.poetry]
 name = "conodictor"
-version = "2.3.1"
+version = "2.3.2"
 description = "Prediction and classification of conopeptides"
-authors = ["Anicet Ebou <anicet.ebou@gmail.com>", "Dominique Koua <koua.dominique@gmail.com"]
-license = "GPL-3"
+authors = ["Anicet Ebou <anicet.ebou@gmail.com>, Dominique Koua <dominique.koua@inphb.ci>"]
+maintainers = ["Anicet Ebou <anicet.ebou@gmail.com>]
+license = "GPL-3.0-only"
+readme = "README.md"
+homepage = "https://github.com/koualab/conodictor"
+repository = "https://github.com/koualab/conodictor"
+documentation = "https://github.com/koualab/conodictor"
+keywords = ["bioinformatics", "classification", "prediction", "conopeptides"]
+classifiers = [
+            "Development Status :: 5 - Production/Stable",
+            "Intended Audience :: Developers",
+            "Intended Audience :: Education",
+            "Intended Audience :: Science/Research",
+            "Natural Language :: English",
+            "License :: OSI Approved :: GPL-3.0 License",
+            "Programming Language :: Python :: 3.8",
+            "Programming Language :: Python :: 3.9",
+            "Operating System :: Microsoft :: Windows",
+            "Operating System :: POSIX :: Linux",
+            "Operating System :: Unix",
+            "Topic :: Scientific/Engineering :: Bio-Informatics"
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-psutil = "^5.8.0"
-colorlog = "^6.5.0"
+bio = "^1.3.3"
+matplotlib = "^3.5.1"
+pandas = "^1.3.5"
 pyfastx = "^0.8.4"
-argparse = "^1.4.0"
-bio = "^1.2.6"
-DateTime = "^4.3"
-matplotlib = "^3.4.3"
-pandas = "^1.3.3"
-pathlib = "^1.0.1"
 
 [tool.poetry.dev-dependencies]
+flake8 = "^4.0.1"
+black = "^21.12b0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

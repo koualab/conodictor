@@ -19,7 +19,6 @@ from Bio import SearchIO
 from Bio.Seq import reverse_complement, translate
 import bz2
 from collections import Counter, defaultdict
-import colorlog
 import csv
 from datetime import datetime
 from decimal import Decimal
@@ -27,7 +26,6 @@ from distutils.spawn import find_executable
 from functools import reduce
 import gzip
 from heapq import nsmallest
-import logging
 import lzma
 import math
 from matplotlib import pyplot as plt
@@ -37,7 +35,6 @@ import os
 import pandas as pd
 from pathlib import Path
 import platform
-import psutil
 import pyfastx
 import re
 import shutil
@@ -58,18 +55,9 @@ CONOPEP_FAMILY = 0
 CONOPEP_FAMILY_NAME = 1
 PRO_REGION = 2
 
-try:
-    NO_COLOR = os.environ["NO_COLOR"]
-except KeyError:
-    NO_COLOR = ""
 
-magic_dict = {
-    b"\x1f\x8b": "gz",
-    b"\x42\x5a": "bz2",
-    b"\xfd\x37\x7a\x58\x5a": "lzma",
-}
-
-# TODO: Reduce memory usage by dumping hmm and pssm dict as json and parse from them
+# TODO: Reduce memory usage by dumping hmm and pssm dict as json and
+#       parse from them
 
 # Define command-line arguments----------------------------------------------
 # Top-level parser
@@ -122,9 +110,10 @@ parser.add_argument(
 parser.add_argument(
     "--filter",
     type=str,
-    default="pssm",
+    default="no",
     choices=["both", "hmm", "pssm", "no"],
-    help="Activate the removal of sequences that matches only the signal and/or proregions for a method. Default: pssm",
+    help="Activate the removal of sequences that matches only the signal and"
+    + "/or proregions for a method. Default: pssm",
 )
 parser.add_argument(
     "-a",
@@ -147,34 +136,27 @@ parser.add_argument(
 parser.add_argument(
     "-q", "--quiet", action="store_true", help="Decrease program verbosity"
 )
-parser.add_argument(
-    "--debug", action="store_true", help="Activate debug mode"
-)
+parser.add_argument("--debug", action="store_true", help="Activate debug mode")
 
 args = parser.parse_args()
 
 
 def main():
-    # Define start time----------------------------------------------------------
+    # Define start time------------------------------------------------------
     startime = datetime.now()
-
-    # Record memory
-    memory_before = get_process_memory()
-
-    # Instantiate logging
-    setup_logging()
 
     # Handling db directory path specification-------------------------------
     bindir = Path(__file__).resolve().parent
     try:
         dbdir = os.environ["CONODB"] or Path(bindir, "db")
     except KeyError:
-        err(
-            "Models for predictions not found in $PATH. "
+        print(
+            "Error: Models for predictions not found in $PATH. "
             + "Please set CONODB environment variable to the path"
             + "where models are stored."
             + "Visit https://github.com/koualab/conodictor "
-            + "for more informations."
+            + "for more informations.",
+            file=sys.stderr,
         )
         sys.exit(1)
 
@@ -194,7 +176,6 @@ def main():
             sys.exit(1)
     else:
         msg(f"Creating the output directory {args.out}")
-        print("create")
         os.mkdir(args.out)
         os.mkdir(Path(args.out, "tmp"))
 
@@ -256,7 +237,8 @@ def main():
         sys.exit(1)
 
     # Input sequence file manipulation---------------------------------------
-    # Check if file is compressed and decompress it or return path of uncompressed file
+    # Check if file is compressed and decompress it or return path of
+    # uncompressed file
     file_path = decompress_file(args.file)
 
     # Open fasta file (build file index)
@@ -271,11 +253,9 @@ def main():
             str(file_path),
         )
         inpath = Path(f"{file_path}_allpep.fa")
-        DECOMPRESSED_FILE = inpath
     elif isdnaorproteins(infa[0].seq) == "protein":
         msg("You provided amino acid fasta file")
         inpath = file_path
-        DECOMPRESSED_FILE = file_path
     else:
         err(
             " Your file is not a DNA or amino acid file,"
@@ -419,8 +399,9 @@ def main():
                 ]
             )
     pssmfile.close()
+
+    # Clear pssmverif from unwanted sequences
     if args.filter in ["pssm", "both"]:
-        # Clear pssmverif from unwanted sequences
         msg("Filtering out artifacts identified by PSSMs")
         pssmdict = clear_dict(pssmdict, False)
 
@@ -450,13 +431,31 @@ def main():
     outfile = open(Path(args.out, "summary.csv"), "a")
 
     # Get final sequences which has been classified
-    uniq_final = {
-        k: v
-        for k, v in finalfam.items()
-        if v != [UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM]
-    }
+    if args.filter == "pssm":
+        msg("Applying filter to sequences")
+        uniq_final = {
+            k: v
+            for k, v in finalfam.items()
+            if v != [UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM]
+            if v[0] != UNKNOWN_FAM
+        }
+    elif args.filter == "hmm":
+        msg("Applying filter to sequences")
+        uniq_final = {
+            k: v
+            for k, v in finalfam.items()
+            if v != [UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM]
+            if v[1] != UNKNOWN_FAM
+        }
+    else:
+        uniq_final = {
+            k: v
+            for k, v in finalfam.items()
+            if v != [UNKNOWN_FAM, UNKNOWN_FAM, UNKNOWN_FAM]
+        }
 
     if args.faa:
+        msg("Writing out fasta file of matched sequences")
         # Create dict of matched sequence for future access
         matched_sequences = {}
         for k, v in uniq_final.items():
@@ -467,7 +466,23 @@ def main():
             "w",
         ) as faah:
             for k, v in matched_sequences.items():
-                faah.write(f">{k}\n{v}\n")
+                faah.write(f">{k} conodictor={uniq_final[k][2]}\n{v}\n")
+        faah.close()
+
+        msg("Writing out fasta file of matched sequences")
+        # Create dict of matched sequence for future access
+        matched_sequences_without_orf = {}
+        for k, v in uniq_final.items():
+            matched_sequences_without_orf[k] = get_seq_without_orf_pred(
+                k, hmmdict, v[0], infile
+            )
+        # Write the fasta file
+        with open(
+            Path(args.out, f"{Path(args.file).stem}_predicted_no_orf.fa"),
+            "w",
+        ) as faah:
+            for k, v in matched_sequences_without_orf.items():
+                faah.write(f">{k} conodictor={uniq_final[k][2]}\n{v}\n")
         faah.close()
 
     # Enter "reads" mode
@@ -527,9 +542,8 @@ def main():
     msg("Done with writing output.")
 
     # Finishing -------------------------------------------------------------
-    # Cleaning around ...
     msg("Cleaning around...")
-    shutil.move("conodictor.log", Path(args.out, "conodictor.log"))
+
     try:
         shutil.rmtree(Path(args.out, "tmp"))
     except OSError:
@@ -543,9 +557,6 @@ def main():
         donut_graph(3)
     msg("Done creating donut plot")
     msg(f"Check {args.out} folder for results")
-    msg(
-        f"Memory used (RSS in MB): {(get_process_memory() - memory_before)/1000000}"
-    )
     msg(f"Walltime used (hh:mm:ss.ms): {elapsed_since(startime)}")
     if len(seqids) % 2:
         msg("Nice to have you. Share, enjoy and come back!")
@@ -553,7 +564,7 @@ def main():
         msg("Thanks you, come again.")
 
 
-# Functions ----------------------------------------------------------------------------------
+# Functions -------------------------------------------------------------------
 def clear_dict(hdict, hmm):
     """
     clear_dict filter out sequences without a MATURE HMM or PSSM profile
@@ -710,13 +721,15 @@ def donut_graph(ncol):
     ]
 
     # White circle
-    _, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
+    _, ax = plt.subplots(figsize=(13, 10), subplot_kw=dict(aspect="equal"))
     wedges, _ = ax.pie(
-        np.array(values).ravel(), wedgeprops=dict(width=0.5), startangle=-40
+        np.array(values).ravel(),
+        wedgeprops=dict(width=0.5),
+        startangle=-40,
+        shadow=False,
     )
-    ax.legend(
-        wedges, labels, loc="center left", bbox_to_anchor=(1, 0, 0.5, 1)
-    )
+    # bbox: x, y, width, height bbox_to_anchor=(0.9, 0, 0.8, 1)
+    ax.legend(wedges, labels, loc="lower center", ncol=4)
     ax.set_title("ConoDictor Predictions")
     plt.text(-2, -1.5, f"Made with ConoDictor v{VERSION}")
     plt.savefig(Path(args.out, "superfamilies_distribution.png"), dpi=300)
@@ -728,19 +741,23 @@ def elapsed_since(start):
 
 
 def err(text):
-    if NO_COLOR == "":
-        colorlog.error(text)
-    elif NO_COLOR != "":
-        logging.error(text)
+    print(f"[ERROR] {text}", file=sys.stderr)
 
 
-def extend(seq, pattern):
+def extend_seq(seq, pattern):
     """"""
 
-    l = 0
+    lr = 0
     r = 0
 
-    is_stop = pattern.find("*")
+    stop = ""
+
+    if "*" in seq:
+        stop = "*"
+    elif "X" in seq:
+        stop = "X"
+
+    is_stop = pattern.find(stop)
 
     if is_stop != -1:
         pattern = pattern[:is_stop]
@@ -756,27 +773,27 @@ def extend(seq, pattern):
     rstr = seq[rind:]
 
     # Look for M and * in left string and * in right string
-    rindx = rstr.find("*")
+    rindx = rstr.find(stop)
     lindm = lstr.find("M")
 
     # Use rindex to find last occurence of *
-    lindx = lstr.rfind("*")
+    lindx = lstr.rfind(stop)
 
     # Case a Methionine is closer to begin of pattern than a stop
     if lindm > lindx:
-        l = lindm
+        lr = lindm
     elif lindm < lindx:
         # Case a stop is closer to begin of pattern than a methionine
-        l = lindx + 1  # +1 to avoid display of * in sequence
+        lr = lindx + 1  # +1 to avoid display of * in sequence
     else:
-        l = 0
+        lr = 0
 
     if rindx != -1:
         r = rindx
     else:
         r = len(seq)
 
-    extseq = lstr[l:] + pattern + rstr[:r]
+    extseq = lstr[lr:] + pattern + rstr[:r]
 
     return extseq
 
@@ -830,12 +847,31 @@ def get_fam_or_unknown(id, hmmfam, pssmfam):
 
 
 def get_file_type(filename):
-    max_len = max(len(x) for x in magic_dict)
+    """
+    get_file_type get file compression type matching the magic bytes
+
+    :filename: File name of the file to check
+    """
+
+    magic_dict = {
+        b"\x1f\x8b": "gz",
+        b"\x42\x5a": "bz2",
+        b"\xfd\x37\x7a\x58\x5a": "lzma",
+    }
+
+    # The longer byte to read in at file start
+    # is max(len(x) for x in magic_dict) which gives 7 as result
     with open(filename, "rb") as f:
-        file_start = f.read(max_len)
+
+        # Read at most 7 bytes at file start
+        file_start = f.read(7)
+
+        # Match bytes read with compression type
         for magic, filetype in magic_dict.items():
             if file_start.startswith(magic):
                 return filetype
+
+        # If no match, the file is uncompressed
         return "uncompressed"
 
 
@@ -871,12 +907,6 @@ def get_hmm_fam(mdict):
     return seqfam
 
 
-def get_process_memory():
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
-    return mem_info.rss
-
-
 def get_pssm_fam(mdict):
     """
     get_pssm_fam return the family with the highest number of
@@ -910,7 +940,10 @@ def get_pssm_fam(mdict):
             fam = possible_fam[0][0]
         elif len(possible_fam) > 1:
             if len(possible_fam[0][1]) == len(possible_fam[1][1]):
-                fam = f"{CONFLICT_FAM} {possible_fam[0][0]} and {possible_fam[1][0]}"
+                fam = (
+                    f"{CONFLICT_FAM} {possible_fam[0][0]}"
+                    + f" and {possible_fam[1][0]}"
+                )
             elif len(possible_fam[0][1]) > len(possible_fam[1][1]):
                 fam = possible_fam[0][0]
             else:
@@ -933,7 +966,22 @@ def get_seq(seqid, hmmdict, hclass, fastafile):
                 f = [int(item) for sublist in f for item in sublist]
                 seq = fastafile[seqid].seq[min(f) : max(f)]  # noqa
 
-    return extend(fastafile[seqid].seq, seq)
+    return extend_seq(fastafile[seqid].seq, seq)
+
+
+def get_seq_without_orf_pred(seqid, hmmdict, hclass, fastafile):
+
+    seq = ""
+    f = []
+
+    for k in hmmdict.keys():
+        for x, j in hmmdict[k].items():
+            if k == seqid and x == hclass:
+                f.extend(a.split("#")[1].split("|") for a in j)
+                f = [int(item) for sublist in f for item in sublist]
+                seq = fastafile[seqid].seq[min(f) : max(f)]  # noqa
+
+    return seq
 
 
 def get_stats(id, infile):
@@ -1013,11 +1061,7 @@ def msg(text):
 
     :text: Message to print to STDOUT.
     """
-
-    if not args.quiet and NO_COLOR == "":
-        colorlog.info(text)
-    elif not args.quiet and NO_COLOR != "":
-        logging.info(text)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}][INFO] {text}")
 
 
 def print_install_tool(tool):
@@ -1070,33 +1114,6 @@ def run_HMM(file, dbdir, cpus):
     )
 
 
-def setup_logging():
-    # Set up logging to file
-    logging.basicConfig(
-        filename="conodictor.log",
-        format="[%(asctime)s][%(levelname)s] %(message)s (%(filename)s:%(lineno)d)",
-        datefmt="%m-%d-%Y %I:%M:%S",
-        level=logging.INFO,
-    )
-
-    # Define a Handler which writes INFO messages or higher to the stderr
-    console = logging.StreamHandler()
-    console.setFormatter(
-        colorlog.ColoredFormatter(
-            "%(log_color)s[%(levelname)s][%(asctime)s] %(message)s",
-            datefmt="%I:%M:%S",
-            log_colors={
-                "DEBUG": "cyan",
-                "INFO": "white",
-                "WARNING": "yellow",
-                "ERROR": "red",
-            },
-        )
-    )
-
-    logging.getLogger("").addHandler(console)
-
-
 def split_file(file):
     infile = pyfastx.Fasta(file)
     parts_num = math.ceil(len(infile) / 25000)
@@ -1130,10 +1147,7 @@ def split_file(file):
 
 
 def warn(text):
-    if NO_COLOR == "":
-        colorlog.warning(text)
-    elif NO_COLOR != "":
-        logging.warning(text)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}][WARN] {text}")
 
 
 def _flip_dict(mydict):
@@ -1190,7 +1204,7 @@ def exception_handler(
     if args.debug:
         debug_hook(exception_type, exception, traceback)
     else:
-        logging.debug(f"{exception_type.__name__}, {exception}")
+        print(f"{exception_type.__name__}, {exception}")
 
 
 sys.excepthook = exception_handler
