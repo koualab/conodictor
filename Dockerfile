@@ -6,9 +6,9 @@ LABEL base_image="ubuntu:20.04"
 LABEL version="1"
 LABEL software="conodictor"
 LABEL software.version="2.3.2"
-LABEL about.summary="Prediction of conopeptides superfamily from cone snail venom transcriptome."
+LABEL about.summary="Prediction and classification of conopeptides"
 LABEL about.home="https://github.com/koualab/conodictor"
-LABEL about.license="MIT"
+LABEL about.license="GPL-3.0"
 LABEL about.license_file="https://github.com/koualab/conodictor/blob/master/LICENSE"
 LABEL maintainer="Anicet Ebou"
 LABEL maintainer.email="anicet.ebou@gmail.com"
@@ -54,10 +54,7 @@ RUN wget https://github.com/sib-swiss/pftools3/archive/refs/tags/v3.2.6.tar.gz -
 
 
 # install conodictor
-RUN git clone --depth=1 https://github.com/koualab/conodictor.git && \
-    cd conodictor && \
-    python3 -m pip install -r requirements.txt && \
-    cd .. && mkdir /data && mkdir data/.config
+RUN pip install conodictor
 
 # add pfscan to path
 ENV PATH="$PATH:/var/lib/pftools/bin"
@@ -66,10 +63,10 @@ ENV PATH="$PATH:/var/lib/pftools/bin"
 ENV MPLCONFIGDIR="/data/.config/matplotlib"
 
 # add conodictor to path
-ENV PATH="$PATH:/conodictor"
+#ENV PATH="$PATH:/conodictor"
 
 # add db path to env
-ENV CONODB="/conodictor/db"
+#ENV CONODB="/conodictor/db"
 
 ENV LC_ALL=C
 
