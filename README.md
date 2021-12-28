@@ -2,14 +2,10 @@
 [![Docker](https://img.shields.io/docker/pulls/ebedthan/conodictor.svg)]()
 
 
-<h1 align="center">
-  ConoDictor
-</h1>
-<h3 align="center">
-  Improved prediction and classification of conopeptides
-</h3>
+## ConoDictor: A fast and accurate prediction and classification tool for conopeptides
 
-## Introduction
+
+### Introduction
 
 Cone snails are among the richest sources of natural peptides with promising pharmacological and therapeutic applications. With the reduced costs of RNAseq, scientists now heavily rely on venom gland transcriptomes for the mining of novel bioactive conopeptides, but the bioinformatic analyses often hamper the discovery process.
 
@@ -17,21 +13,29 @@ ConoDictor 2 is a standalone and user-friendly command-line program. We have upd
 
 The only input ConoDictor 2 requires is the assembled transcriptome or the raw reads file either in DNA or amino acid: used alphabet is automatically recognized. ConoDictor 2 run predictions directly on the proteins file (submitted or dynamically generated) and tries to report the longest conopeptide  precursor-like sequence.
 
-## Installation
+### Installation
 
-### Docker
+#### Install from Pip
+
+You will have first to install [HMMER 3](https://hmmer.org) and [Pftools](https://github.com/sib-swiss/pftools3) to be able to run conodictor.
+
+```
+pip install conodictor
+```
+
+#### Using containers
+
+#### Docker
 
 Accessible at https://hub.docker.com/u/ebedthan or on [BioContainers](https://github.com/BioContainers/containers/tree/master/conodictor/2.2.2).
 
-
-#### Get the container
 
 ```
 docker pull ebedthan/conodictor:latest
 docker run ebedthan/conodictor:latest conodictor -h
 ```
 
-#### Example of a run
+Example of a run
 
 ```
 docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) ebedthan/conodictor:latest conodictor --out /data/outdir /data/input.fa.gz
@@ -40,7 +44,7 @@ docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) ebedthan/conodictor:late
 See https://staph-b.github.io/docker-builds/run_containers/ for more informations on how to properly run a docker container.
 
 
-### Singularity
+#### Singularity
 
 The singularity container does not need admin privileges making it
 suitable for university clusters and HPC.
@@ -51,35 +55,29 @@ singularity exec conodictor.sif conodictor -h
 ```
 
 
-### Unix-like operating systems 
+#### Install from source
 
 ```
-# Download ConoDictor latest version
-wget https://github.com/koualab/conodictor/releases/tag/v2.3.0
-
-# or Download ConoDictor development version
+# Download ConoDictor development version
 git clone https://github.com/koualab/conodictor.git conodictor
 
+# Navigate to directory
 cd conodictor
 
-# Copy conodictor bin folder: Requires admin privileges
-sudo cp conodictor /usr/local/bin
+# Install with poetry: see https://python-poetry.org
+poetry install --no-dev
 
-# Copy conodictor databases: Requires admin privileges
-sudo mkdir /usr/share/conodictor/db
-sudo cp db/* /usr/share/conodictor/db
+# Enter the Python virtual environment with
+poetry shell
 
-# Add path to databases in .bashrc and/or .bash_profile
-export CONODB=/usr/share/conodictor/db
-
-# Create new python environment conoenv
-cd ..
-python3 -m venv conoenv
-python3 -m pip install -r conodictor/requirements.txt
-
-# Restart terminal or source .bashrc or .bash_profile
 # Test conodictor is correctly installed
 conodictor -h
+```
+
+If you do not want to go into the virtual environment just do:
+
+```
+poetry run conodictor -h
 ```
 
 ## Test
@@ -87,13 +85,6 @@ conodictor -h
 * Type `conodictor -h` and it should output something like:
 
 ```
-  _____                  _____  _      _             
- / ____|                |  __ \(_)    | |            
-| |     ___  _ __   ___ | |  | |_  ___| |_ ___  _ __ 
-| |    / _ \| '_ \ / _ \| |  | | |/ __| __/ _ \| '__|
-| |___| (_) | | | | (_) | |__| | | (__| || (_) | |   
- \_____\___/|_| |_|\___/|_____/|_|\___|\__\___/|_|    v2.3.0
-
 conodictor [FLAGS/OPTIONS] <file>
 Examples:
 	conodictor file.fa.gz
@@ -133,7 +124,7 @@ conodictor --out outfolder --cpus 4 --mlen 51 file.fa
 ## Output files
 
 ```
-summary.txt
+summary.csv
 
 sequence  hmm_pred  pssm_pred definitive_pred
 SEQ_ID_1  A A A

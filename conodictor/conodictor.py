@@ -109,11 +109,9 @@ parser.add_argument(
 )
 parser.add_argument(
     "--filter",
-    type=str,
-    default="no",
-    choices=["both", "hmm", "pssm", "no"],
+    action="store_true",
     help="Activate the removal of sequences that matches only the signal and"
-    + "/or proregions for a method. Default: pssm",
+    + "/or proregions for a method. Default: False",
 )
 parser.add_argument(
     "-a",
@@ -334,7 +332,7 @@ def main():
                     )
     hmmfile.close()
 
-    if args.filter in ["hmm", "both"]:
+    if args.filter:
         # Clear hmmverif from unwanted sequences
         msg("Filtering out artifacts identified by HMMs")
         hmmdict = clear_dict(hmmdict, True)
@@ -401,7 +399,7 @@ def main():
     pssmfile.close()
 
     # Clear pssmverif from unwanted sequences
-    if args.filter in ["pssm", "both"]:
+    if args.filter:
         msg("Filtering out artifacts identified by PSSMs")
         pssmdict = clear_dict(pssmdict, False)
 
