@@ -144,18 +144,28 @@ def main():
     startime = datetime.now()
 
     # Handling db directory path specification-------------------------------
-    bindir = Path(__file__).resolve().parent
+    # Are we in a docker file ? If yes the ENV variable IS_DOCKER is True
+    dbdir = ""
     try:
-        dbdir = os.environ["CONODB"] or Path(bindir, "db")
+        is_docker = os.environ["IS_DOCKER"]
     except KeyError:
-        print(
-            "Error: Models for predictions not found in $PATH. "
-            + "Please set CONODB environment variable to the path"
-            + "where models are stored."
-            + "Visit https://github.com/koualab/conodictor "
-            + "for more informations.",
-            file=sys.stderr,
-        )
+        is_docker = False
+
+    if is_docker:
+        dbdir = "/usr/local/lib/python3.8/dist-packages/db"
+    else:
+        bindir = Path(__file__).resolve().parent
+        try:
+            dbdir = os.environ["CONODB"] or Path(bindir, "db")
+        except KeyError:
+            print(
+                "Error: Models for predictions not found in $PATH. "
+                + "Please set CONODB environment variable to the path "
+                + "where models are stored."
+                + "Visit https://github.com/koualab/conodictor "
+                + "for more informations.",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
     # Handling output directory creation-------------------------------------

@@ -62,6 +62,9 @@ ENV PATH="$PATH:/var/lib/pftools/bin"
 # set a writable directory for matplotlib
 ENV MPLCONFIGDIR="/data/.config/matplotlib"
 
+# set variable to indicate we are in a docker dir
+ENV IS_DOCKER="True"
+
 # add conodictor to path
 #ENV PATH="$PATH:/conodictor"
 
