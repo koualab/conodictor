@@ -17,16 +17,13 @@
 import argparse
 from Bio import SearchIO
 from Bio.Seq import reverse_complement, translate
-import bz2
 from collections import Counter, defaultdict
 import csv
 from datetime import datetime
 from decimal import Decimal
 from distutils.spawn import find_executable
 from functools import reduce
-import gzip
 from heapq import nsmallest
-import lzma
 import math
 from matplotlib import pyplot as plt
 import numpy as np
@@ -40,12 +37,11 @@ import re
 import shutil
 import subprocess
 import sys
-from tqdm import tqdm
 import warnings
 
 AUTHOR = "Anicet Ebou, Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.3.2"
+VERSION = "2.3.3"
 
 # Some global variables
 UNKNOWN_FAM = "UNKNOWN"
@@ -140,23 +136,39 @@ args = parser.parse_args()
 
 
 def main():
-    # Define start time------------------------------------------------------
+    # Define start time
     startime = datetime.now()
 
-    # Handling db directory path specification-------------------------------
+    # Handling db directory path specification
     # Are we in a docker file ? If yes the ENV variable IS_DOCKER is True
     dbdir = ""
     try:
+        # get env var telling if we are in docker
         is_docker = os.environ["IS_DOCKER"]
     except KeyError:
         is_docker = False
 
     if is_docker:
+        import tempfile
+
+        # path to hmm and pssm db
         dbdir = "/usr/local/lib/python3.8/dist-packages/db"
+
+        # create a temp dir for matplotlib config
+        temp_dir = tempfile.TemporaryDirectory()
+        os.environ["MPLCONFIGDIR"] = temp_dir.name
     else:
+        # find path to conodictor.py
         bindir = Path(__file__).resolve().parent
         try:
-            dbdir = os.environ["CONODB"] or Path(bindir, "db")
+            dbdir = (
+                # case when path is set by env variable
+                os.environ["CONODB"]
+                # case when app is installed by cloned repo
+                or Path(bindir, "db")
+                # case when app is installed through pip
+                or "/usr/local/lib/python3.8/dist-packages/db"
+            )
         except KeyError:
             print(
                 "Error: Models for predictions not found in $PATH. "
@@ -168,7 +180,7 @@ def main():
             )
         sys.exit(1)
 
-    # Handling output directory creation-------------------------------------
+    # Handling output directory creation
     if os.path.isdir(args.out):
         if args.force:
             warn(f"Reusing output directory {args.out}")
@@ -361,6 +373,8 @@ def main():
     msg(f"Running PSSM prediction using pfscan v{pfscan_match[0]}")
 
     if len(seqids) > 100000:
+        from tqdm import tqdm
+
         msg("Input file contains more than 100 000 sequences")
         msg("Splitting file in chunks to avoid high memory consumption")
         split_file(str(final_file))
@@ -621,6 +635,8 @@ def decompress_file(filename):
     file_path = ""
 
     if file_type == "gz":
+        import gzip
+
         msg("Input file is gzip'd")
         with gzip.open(filename, "r") as seqh:
             with open(file_stem, "wb") as seqo:
@@ -628,6 +644,8 @@ def decompress_file(filename):
             seqo.close()
             file_path = file_stem
     elif file_type == "bz2":
+        import bz2
+
         msg("Input file is bzip'd")
         with bz2.open(filename, "r") as seqh:
             with open(file_stem, "wb") as seqo:
@@ -635,6 +653,8 @@ def decompress_file(filename):
             seqo.close()
             file_path = file_stem
     elif file_type == "lzma":
+        import lzma
+
         msg("Input file is xz'd")
         with lzma.open(filename, "r") as seqh:
             with open(file_stem, "wb") as seqo:

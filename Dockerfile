@@ -5,7 +5,7 @@ FROM ubuntu:20.04
 LABEL base_image="ubuntu:20.04"
 LABEL version="1"
 LABEL software="conodictor"
-LABEL software.version="2.3.2"
+LABEL software.version="2.3.3"
 LABEL about.summary="Prediction and classification of conopeptides"
 LABEL about.home="https://github.com/koualab/conodictor"
 LABEL about.license="GPL-3.0"
@@ -52,24 +52,17 @@ RUN wget https://github.com/sib-swiss/pftools3/archive/refs/tags/v3.2.6.tar.gz -
     make && \
     make install
 
+# set variable to indicate we are in a docker dir
+ENV IS_DOCKER="True"
 
-# install conodictor
-RUN pip install conodictor
+# set a writable directory for matplotlib
+# ENV MPLCONFIGDIR="/data/.config/matplotlib"
 
 # add pfscan to path
 ENV PATH="$PATH:/var/lib/pftools/bin"
 
-# set a writable directory for matplotlib
-ENV MPLCONFIGDIR="/data/.config/matplotlib"
-
-# set variable to indicate we are in a docker dir
-ENV IS_DOCKER="True"
-
-# add conodictor to path
-#ENV PATH="$PATH:/conodictor"
-
-# add db path to env
-#ENV CONODB="/conodictor/db"
+# install conodictor
+RUN pip install conodictor
 
 ENV LC_ALL=C
 
