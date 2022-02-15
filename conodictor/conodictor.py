@@ -269,7 +269,7 @@ def main():
         msg("You provided DNA fasta file")
         msg("Translating input sequences")
         do_translation(
-            str(infa),
+            infa,
             str(file_path),
         )
         inpath = Path(f"{file_path}_allpep.fa")
