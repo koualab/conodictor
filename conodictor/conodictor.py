@@ -178,7 +178,7 @@ def main():
                 + "for more informations.",
                 file=sys.stderr,
             )
-        sys.exit(1)
+            sys.exit(1)
 
     # Handling output directory creation
     if os.path.isdir(args.out):
@@ -269,7 +269,7 @@ def main():
         msg("You provided DNA fasta file")
         msg("Translating input sequences")
         do_translation(
-            str(infa),
+            infa,
             str(file_path),
         )
         inpath = Path(f"{file_path}_allpep.fa")
