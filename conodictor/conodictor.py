@@ -178,7 +178,7 @@ def main():
                 + "for more informations.",
                 file=sys.stderr,
             )
-        sys.exit(1)
+            sys.exit(1)
 
     # Handling output directory creation
     if os.path.isdir(args.out):
