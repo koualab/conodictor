@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # ConoDictor: Prediction and classification of conopeptides
-# Copyright (C) 2019-2021  Koualab
+# Copyright (C) 2019-2022  Koualab
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
@@ -39,7 +39,7 @@ import subprocess
 import sys
 import warnings
 
-AUTHOR = "Anicet Ebou, Dominique Koua"
+AUTHOR = "Anicet Ebou and Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
 VERSION = "2.3.3"
 
@@ -50,10 +50,6 @@ PSSM_SEQ_ID = 3
 CONOPEP_FAMILY = 0
 CONOPEP_FAMILY_NAME = 1
 PRO_REGION = 2
-
-
-# TODO: Reduce memory usage by dumping hmm and pssm dict as json and
-#       parse from them
 
 # Define command-line arguments----------------------------------------------
 # Top-level parser
@@ -308,12 +304,17 @@ def main():
     dupdata = {}
     if args.ndup:
         dupdata = get_dup_seqs(infile, seqids, args.ndup)
+        ldu = len(dupdata)
         if args.mlen is None:
             msg(
-                f"Input file contains {len(dupdata)}"
+                f"Input file contains {ldu}"
                 + f" sequences with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
+        elif ldu == 0:
+            msg(f"We have 0 sequences with at least {args.ndup} occurences.")
+            msg("No prediction will therefore be made. Stopping...")
+            sys.exit(0)
         else:
             msg(
                 f"And from them we have {len(dupdata)} sequences"
@@ -321,9 +322,17 @@ def main():
                 + " Only these sequences will be used for prediction."
             )
     # Create a fasta file of sequence after filtering
-    if args.ndup is not None or args.mlen is not None:
+    if args.ndup is not None:
         with open(Path(args.out, "tmp", "filtfa.fa"), "w") as fih:
             for kid in dupdata.keys():
+                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
+        fih.close()
+
+        # Use the filtered file as input of further commands
+        final_file = Path(args.out, "tmp", "filtfa.fa")
+    elif args.ndup is None and args.mlen is not None:
+        with open(Path(args.out, "tmp", "filtfa.fa"), "w") as fih:
+            for kid in seqids:
                 fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
         fih.close()
 
@@ -568,6 +577,7 @@ def main():
 
     try:
         shutil.rmtree(Path(args.out, "tmp"))
+        os.remove(Path(f"{args.file}.fxi"))
     except OSError:
         pass
 
@@ -742,10 +752,12 @@ def donut_graph(ncol):
     labels = [
         f"{k1}: {v1}"
         for k1, v1 in sorted(dtc.items())
-        if not k1.startswith(CONFLICT_FAM)
+        if not k1.startswith((CONFLICT_FAM, UNKNOWN_FAM))
     ]
     values = [
-        x for k2, x in sorted(dtc.items()) if not k2.startswith(CONFLICT_FAM)
+        x
+        for k2, x in sorted(dtc.items())
+        if not k2.startswith((CONFLICT_FAM, UNKNOWN_FAM))
     ]
 
     # White circle
@@ -756,8 +768,8 @@ def donut_graph(ncol):
         startangle=-40,
         shadow=False,
     )
-    # bbox: x, y, width, height bbox_to_anchor=(0.9, 0, 0.8, 1)
-    ax.legend(wedges, labels, loc="lower center", ncol=4)
+    # bbox: x, y, width, height
+    ax.legend(wedges, labels, loc="lower center", ncol=6)
     ax.set_title("ConoDictor Predictions")
     plt.text(-2, -1.5, f"Made with ConoDictor v{VERSION}")
     plt.savefig(Path(args.out, "superfamilies_distribution.png"), dpi=300)
