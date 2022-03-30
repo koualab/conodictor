@@ -100,6 +100,12 @@ parser.add_argument(
     help="Create a fasta file of matched sequences. Default: False.",
 )
 parser.add_argument(
+    "--cds_filter",
+    action="store_true",
+    help="Activate the filter of sequences that start by the start codon methionine"
+         "and end with the stop codon. Default: False"
+)
+parser.add_argument(
     "--filter",
     action="store_true",
     help="Activate the removal of sequences that matches only the signal and"
@@ -259,9 +265,9 @@ def main():
 
     # Open fasta file (build file index)
     infa = pyfastx.Fasta(str(file_path))
-
+    input_type = isdnaorproteins(infa[0].seq)
     # Test if alphabet is DNA, or protein and translate or not
-    if isdnaorproteins(infa[0].seq) == "DNA":
+    if input_type == "DNA":
         msg("You provided DNA fasta file")
         msg("Translating input sequences")
         do_translation(
@@ -269,7 +275,7 @@ def main():
             str(file_path),
         )
         inpath = Path(f"{file_path}_allpep.fa")
-    elif isdnaorproteins(infa[0].seq) == "protein":
+    elif input_type == "protein":
         msg("You provided amino acid fasta file")
         inpath = file_path
     else:
@@ -278,6 +284,19 @@ def main():
             + " please provide a DNA or amino acid fasta file"
         )
         sys.exit(1)
+
+    # If cds_filter is set to True, then filter the sequences by start codon
+    # and end codon
+    if args.cds_filter:
+        msg("Keeping sequences starting with methionine and ending with "
+            "a stop codon")
+        inpath = write_prot_seq_from_cds(inpath, file_path)
+    else:
+        if input_type == "DNA":
+            msg("This is likely not intended. Your new translated peptide "
+                "fasta file contains the raw peptide sequences, without "
+                "filtering by starting codon methionine and stop codon")
+
 
     # Build sequence index and get list of keys -----------------------------
     infile = pyfastx.Fasta(str(inpath))
@@ -739,6 +758,22 @@ def do_translation(infile, outfile, sw=60):
                         + f"{nl.join(map(str, seq_letters))}\n"
                     )
 
+ 
+def write_prot_seq_from_cds(infile, outfile):
+    """
+    write_prot_seq_from_cds write a filtered proteins fasta file.
+
+    :infile: Pyfasta object.
+    :outfile: Output file.
+    """
+    new_inpath = Path(f"{outfile}_pep_from_cds.fa")
+    with open(new_inpath, "w") as protfile:
+        for name, prot_seq in pyfastx.Fasta(str(infile), build_index=False):
+            filtered_seqs = _get_prot_seq_from_cds(prot_seq)
+            for idx, filtered_seq in enumerate(filtered_seqs):
+                protfile.write(f">{name}_id={idx + 1}\n{filtered_seq}\n")
+    return new_inpath
+                   
 
 def donut_graph(ncol):
     """
@@ -1227,6 +1262,27 @@ def _translate_seq(seq):
     seqlist.append(translate(reverse_complement(seq)[2:]))
 
     return seqlist
+
+
+def _get_prot_seq_from_cds(prot_seq):
+    """
+    _get_prot_seq_from_cds keep all sequences of non-zero length
+    that start with the start codon methionine and end with the stop codon.
+
+    :prot_seq: Peptide sequence to filter
+    """
+    stop_codon = '*'
+    start_codon = 'M'
+    filtered_seqs = []
+    if stop_codon in prot_seq:
+        stop_codon_splits = prot_seq.split(stop_codon)
+        stop_codon_splits.pop()
+        for stop_codon_split in stop_codon_splits:
+            if start_codon in stop_codon_split:
+                valid_seq = stop_codon_split.split(start_codon, 1)[1]
+                if len(valid_seq) > 0:
+                    filtered_seqs.append(start_codon + valid_seq)
+    return filtered_seqs
 
 
 def exception_handler(
