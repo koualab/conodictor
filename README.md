@@ -162,6 +162,12 @@ Standard meta-options:
          --help, -h    Print help and exit
 
 ```
+
+## Citation
+
+When using ConoDictor2 in your work, you should cite:
+
+Dominique Koua, Anicet Ebou, Sébastien Dutertre, Improved prediction of conopeptide superfamilies with ConoDictor 2.0, Bioinformatics Advances, Volume 1, Issue 1, 2021, vbab011, https://doi.org/10.1093/bioadv/vbab011.
   
 ## Bugs
 
@@ -183,7 +189,7 @@ Submit problems or requests to the [Issue Tracker](https://github.com/koualab/co
 
 ## Licence
 
-[GPL v3](https://github.com/koualab/conodictor/blob/main/LICENSE)
+[GPL v3](https://github.com/koualab/conodictor/blob/main/LICENSE).
 
 For commercial uses please contact Dominique Koua at dominique.koua@inphb.ci.
 
