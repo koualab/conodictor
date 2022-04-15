@@ -393,7 +393,6 @@ def main():
         msg("Input file contains more than 100 000 sequences")
         msg(
             "Splitting file in chunks to avoid high memory consumption",
-            ok="...done",
         )
         split_file(str(final_file))
 
@@ -583,7 +582,7 @@ def main():
 
     # Finishing -------------------------------------------------------------
     if not args.debug:
-        msg("Cleaning around", ok="...done")
+        msg("Cleaning around")
 
         try:
             shutil.rmtree(Path(args.out, "tmp"))
@@ -597,13 +596,13 @@ def main():
     else:
         donut_graph(3)
     msg("Done creating donut plot")
-    msg("Classification finished successfully", ok="🎉")
+    msg("Classification finished successfully")
     msg(f"Check {args.out} folder for results")
     msg(f"Walltime used (hh:mm:ss.ms): {elapsed_since(startime)}")
     if len(seqids) % 2:
-        msg("Nice to have you. Share, enjoy and come back!", ok="🎊")
+        msg("Nice to have you. Share, enjoy and come back!")
     else:
-        msg("Thanks you, come again.", ok="🙏🏾")
+        msg("Thanks you, come again.")
 
     sys.exit(ExitStatus.success)
 
@@ -1107,7 +1106,7 @@ def isdnaorproteins(s):
     return stype
 
 
-def msg(text, ok=" "):
+def msg(text):
     """
     msg produces nice message and info output on terminal.
 

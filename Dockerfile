@@ -5,7 +5,7 @@ FROM ubuntu:20.04
 LABEL base_image="ubuntu:20.04"
 LABEL version="1"
 LABEL software="conodictor"
-LABEL software.version="2.3.3"
+LABEL software.version="2.3.4"
 LABEL about.summary="Prediction and classification of conopeptides"
 LABEL about.home="https://github.com/koualab/conodictor"
 LABEL about.license="GPL-3.0"
