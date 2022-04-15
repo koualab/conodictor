@@ -34,6 +34,8 @@ pandas = "^1.3.5"
 pyfastx = "^0.8.4"
 pybloom-live = "^3.1.0"
 mmh3 = "^3.0.0"
+yaspin = "^2.1.0"
+exitstatus = "^2.2.0"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^4.0.1"

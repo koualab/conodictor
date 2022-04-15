@@ -22,6 +22,7 @@ import csv
 from datetime import datetime
 from decimal import Decimal
 from distutils.spawn import find_executable
+from exitstatus import ExitStatus
 from functools import reduce
 from heapq import nsmallest
 import math
@@ -174,7 +175,7 @@ def main():
                 + "for more informations.",
                 file=sys.stderr,
             )
-            sys.exit(1)
+            sys.exit(ExitStatus.failure)
 
     # Handling output directory creation
     if os.path.isdir(args.out):
@@ -189,7 +190,7 @@ def main():
                 + " Please change it using --out option or use --force"
                 + " to reuse it. "
             )
-            sys.exit(1)
+            sys.exit(ExitStatus.failure)
     else:
         msg(f"Creating the output directory {args.out}")
         os.mkdir(args.out)
@@ -222,7 +223,7 @@ def main():
             + f" but system has only {available_cpus}."
         )
         cpus = available_cpus
-    msg(f"We will use maximum of {cpus} cores.")
+    msg(f"We will use maximum of {cpus} cores")
 
     # Verify presence of needed tools ---------------------------------------
     needed_tools = ("hmmsearch", "pfscanV3")
@@ -231,6 +232,7 @@ def main():
             msg(f"Found {tool}")
         else:
             print_install_tool(tool)
+            sys.exit(ExitStatus.failure)
 
     # Getting version of tools ----------------------------------------------
     hmmsearch_match, pfscan_match = get_tools_version()
@@ -243,14 +245,17 @@ def main():
             "hmmsearch installed is below 3.0 version,"
             + "  please upgrade at https://hmmer3.org."
         )
-        sys.exit(1)
+        sys.exit(ExitStatus.failure)
 
     else:
-        err(
-            " Cannot parse HMMER version. Please check "
-            + " it's correctly installed. See https://hmmer3.org."
-        )
-        sys.exit(1)
+        err(" Cannot parse HMMER version")
+        print_install_tool("hmmsearch")
+        sys.exit(ExitStatus.failure)
+
+    if not pfscan_match:
+        err("Cannot parse pfscan version. Please upgrade your version")
+        print_install_tool("pfscanV3")
+        sys.exit(ExitStatus.failure)
 
     # Input sequence file manipulation---------------------------------------
     # Check if file is compressed and decompress it or return path of
@@ -277,7 +282,7 @@ def main():
             " Your file is not a DNA or amino acid file,"
             + " please provide a DNA or amino acid fasta file"
         )
-        sys.exit(1)
+        sys.exit(ExitStatus.failure)
 
     # Build sequence index and get list of keys -----------------------------
     infile = pyfastx.Fasta(str(inpath))
@@ -292,10 +297,10 @@ def main():
                 + f"length >= {args.mlen} bp"
                 + "No sequence will be predicted. Conodictor is stopping..."
             )
-            sys.exit(1)
+            sys.exit(ExitStatus.failure)
         else:
             msg(
-                f"Input file contains {nb_occur}"
+                f"Input file contains {nb_occur:,}"
                 + f" sequences with length >= {args.mlen} bp"
             )
             seqids = seqids.filter(seqids >= args.mlen)
@@ -307,20 +312,21 @@ def main():
         ldu = len(dupdata)
         if args.mlen is None:
             msg(
-                f"Input file contains {ldu}"
+                f"Input file contains {ldu:,}"
                 + f" sequences with at least {args.ndup} occurences."
                 + " Only these sequences will be used for prediction."
             )
         elif ldu == 0:
             msg(f"We have 0 sequences with at least {args.ndup} occurences.")
             msg("No prediction will therefore be made. Stopping...")
-            sys.exit(0)
+            sys.exit(ExitStatus.failure)
         else:
             msg(
-                f"And from them we have {len(dupdata)} sequences"
-                + f" with at least {args.ndup} occurences."
-                + " Only these sequences will be used for prediction."
+                f"And from them we have {len(dupdata):,} sequences"
+                + f" with at least {args.ndup} occurences"
             )
+            msg("Only these sequences will be used for prediction")
+
     # Create a fasta file of sequence after filtering
     if args.ndup is not None:
         with open(Path(args.out, "tmp", "filtfa.fa"), "w") as fih:
@@ -385,7 +391,10 @@ def main():
         from tqdm import tqdm
 
         msg("Input file contains more than 100 000 sequences")
-        msg("Splitting file in chunks to avoid high memory consumption")
+        msg(
+            "Splitting file in chunks to avoid high memory consumption",
+            ok="...done",
+        )
         split_file(str(final_file))
 
         # Run pfscan
@@ -570,30 +579,33 @@ def main():
                 outfile.write(f"{k},{v[0]},{v[1]},{v[2]}\n")
             outfile.close()
 
-    msg("Done with writing output.")
+    msg("Done with writing output")
 
     # Finishing -------------------------------------------------------------
-    msg("Cleaning around...")
+    if not args.debug:
+        msg("Cleaning around", ok="...done")
 
-    try:
-        shutil.rmtree(Path(args.out, "tmp"))
-        os.remove(Path(f"{args.file}.fxi"))
-    except OSError:
-        pass
+        try:
+            shutil.rmtree(Path(args.out, "tmp"))
+            os.remove(Path(f"{args.file}.fxi"))
+        except OSError:
+            pass
 
-    msg("Classification finished successfully.")
     msg("Creating donut plot")
     if args.mlen:
         donut_graph(6)
     else:
         donut_graph(3)
     msg("Done creating donut plot")
+    msg("Classification finished successfully", ok="🎉")
     msg(f"Check {args.out} folder for results")
     msg(f"Walltime used (hh:mm:ss.ms): {elapsed_since(startime)}")
     if len(seqids) % 2:
-        msg("Nice to have you. Share, enjoy and come back!")
+        msg("Nice to have you. Share, enjoy and come back!", ok="🎊")
     else:
-        msg("Thanks you, come again.")
+        msg("Thanks you, come again.", ok="🙏🏾")
+
+    sys.exit(ExitStatus.success)
 
 
 # Functions -------------------------------------------------------------------
@@ -1095,7 +1107,7 @@ def isdnaorproteins(s):
     return stype
 
 
-def msg(text):
+def msg(text, ok=" "):
     """
     msg produces nice message and info output on terminal.
 
@@ -1117,8 +1129,6 @@ def print_install_tool(tool):
             "pfscanV3 not found. Please visit"
             + "https://github.com/sib-swiss/pftools3."
         )
-
-    sys.exit(1)
 
 
 def run_PSSM(file, dbdir, cpus):

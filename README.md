@@ -1,5 +1,10 @@
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![PyPI](https://img.shields.io/pypi/v/conodictor.svg)](https://pypi.org/project/conodictor)
+[![Wheel](https://img.shields.io/pypi/wheel/conodictor.svg)](https://pypi.org/project/conodictor)
+[![Language](https://img.shields.io/pypi/implementation/conodictor)](https://pypi.org/project/conodictor)
+[![Pyver](https://img.shields.io/pypi/pyversions/conodictor.svg)](https://pypi.org/project/conodictor)
+[![Downloads](https://img.shields.io/pypi/dm/conodictor)](https://pypi.org/project/conodictor)
 [![Docker](https://img.shields.io/docker/pulls/ebedthan/conodictor.svg)]()
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 
 ## ConoDictor: A fast and accurate prediction and classification tool for conopeptides
