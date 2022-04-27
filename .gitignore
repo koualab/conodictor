@@ -1,4 +1,5 @@
-.vscode/*
-ConoDictor/*
+.vscode
+ConoDictor
 .config
 dist
+conodictor/__pycache__

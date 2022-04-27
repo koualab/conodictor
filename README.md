@@ -1,5 +1,10 @@
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![PyPI](https://img.shields.io/pypi/v/conodictor.svg)](https://pypi.org/project/conodictor)
+[![Wheel](https://img.shields.io/pypi/wheel/conodictor.svg)](https://pypi.org/project/conodictor)
+[![Language](https://img.shields.io/pypi/implementation/conodictor)](https://pypi.org/project/conodictor)
+[![Pyver](https://img.shields.io/pypi/pyversions/conodictor.svg)](https://pypi.org/project/conodictor)
+[![Downloads](https://img.shields.io/pypi/dm/conodictor)](https://pypi.org/project/conodictor)
 [![Docker](https://img.shields.io/docker/pulls/ebedthan/conodictor.svg)]()
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 
 ## ConoDictor: A fast and accurate prediction and classification tool for conopeptides
@@ -19,7 +24,7 @@ The only input ConoDictor 2 requires is the assembled transcriptome or the raw r
 
 You will have first to install [HMMER 3](https://hmmer.org) and [Pftools](https://github.com/sib-swiss/pftools3) to be able to run conodictor.
 
-```
+```bash
 pip install conodictor
 ```
 
@@ -30,14 +35,14 @@ pip install conodictor
 Accessible at https://hub.docker.com/u/ebedthan or on [BioContainers](https://github.com/BioContainers/containers/tree/master/conodictor/2.2.2).
 
 
-```
+```bash
 docker pull ebedthan/conodictor:latest
 docker run ebedthan/conodictor:latest conodictor -h
 ```
 
 Example of a run
 
-```
+```bash
 docker run --rm=True -v $PWD:/data -u $(id -u):$(id -g) ebedthan/conodictor:latest conodictor --out /data/outdir /data/input.fa.gz
 ```
 
@@ -49,7 +54,7 @@ See https://staph-b.github.io/docker-builds/run_containers/ for more information
 The singularity container does not need admin privileges making it
 suitable for university clusters and HPC.
 
-```
+```bash
 singularity build conodictor.sif docker://ebedthan/conodictor:latest
 singularity exec conodictor.sif conodictor -h
 ```
@@ -57,7 +62,7 @@ singularity exec conodictor.sif conodictor -h
 
 #### Install from source
 
-```
+```bash
 # Download ConoDictor development version
 git clone https://github.com/koualab/conodictor.git conodictor
 
@@ -76,7 +81,7 @@ conodictor -h
 
 If you do not want to go into the virtual environment just do:
 
-```
+```bash
 poetry run conodictor -h
 ```
 
@@ -84,7 +89,7 @@ poetry run conodictor -h
 
 * Type `conodictor -h` and it should output something like:
 
-```
+```bash
 conodictor [FLAGS/OPTIONS] <file>
 Examples:
 	conodictor file.fa.gz
@@ -115,7 +120,7 @@ optional arguments:
 
 ## Invoking conodictor
 
-```
+```bash
 conodictor file.fa.gz
 conodictor --out outfolder --cpus 4 --mlen 51 file.fa
 ```
@@ -123,13 +128,14 @@ conodictor --out outfolder --cpus 4 --mlen 51 file.fa
 
 ## Output files
 
-```
-summary.csv
+The comma separeted-values file summary.csv can be easily viewed with any office suite,
+or text editor.
 
-sequence  hmm_pred  pssm_pred definitive_pred
-SEQ_ID_1  A A A
-SEQ_ID_2  B D CONFLICT B and D
-SEQ_ID_3  O1  O1  O1
+```csv
+sequence,hmm_pred,pssm_pred definitive_pred
+SEQ_ID_1,A,A,A
+SEQ_ID_2,B,D,CONFLICT B and D
+SEQ_ID_3,O1,O1,O1
 ...
 
 ```
@@ -156,6 +162,12 @@ Standard meta-options:
          --help, -h    Print help and exit
 
 ```
+
+## Citation
+
+When using ConoDictor2 in your work, you should cite:
+
+Dominique Koua, Anicet Ebou, Sébastien Dutertre, Improved prediction of conopeptide superfamilies with ConoDictor 2.0, Bioinformatics Advances, Volume 1, Issue 1, 2021, vbab011, https://doi.org/10.1093/bioadv/vbab011.
   
 ## Bugs
 
@@ -177,7 +189,9 @@ Submit problems or requests to the [Issue Tracker](https://github.com/koualab/co
 
 ## Licence
 
-[GPL v3](https://github.com/koualab/conodictor/blob/main/LICENSE)
+[GPL v3](https://github.com/koualab/conodictor/blob/main/LICENSE).
+
+For commercial uses please contact Dominique Koua at dominique.koua@inphb.ci.
 
 ## Authors
 
