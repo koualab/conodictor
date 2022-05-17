@@ -64,70 +64,71 @@ When using this program in your research, please cite
 
 parser = argparse.ArgumentParser(
     prog="conodictor",
-    formatter_class=argparse.RawDescriptionHelpFormatter,
-    usage=f"""
-conodictor v{VERSION}
-\n
-{citation}
-
-\n\nconodictor [FLAGS/OPTIONS] <file>
-\nExamples:
-\tconodictor file.fa.gz
-\tconodictor --out outfolder --cpus 4 --mlen 51 file.fa\n""",
-    epilog=f"Licence:   GPL-3\nHomepage:  {URL}",
+    usage="conodictor [options] <FILE>",
+    add_help=False,
+    epilog="Citation: Koua et al., 2021, Bioinformatics Advances",
 )
 
-parser.add_argument("file", help="Specifies input file.")
+parser.add_argument("file", help=argparse.SUPPRESS)
 parser.add_argument(
     "-o",
     "--out",
     type=Path,
+    metavar="DIR",
     default="ConoDictor",
-    help="Specify output folder.",
+    help="output result to DIR [ConoDictor]",
 )
 parser.add_argument(
     "--mlen",
     type=int,
-    help="Set the minimum length of the sequence to be considered as a match",
+    metavar="INT",
+    help="minimum length of sequences to be considered [off]",
 )
 parser.add_argument(
     "--ndup",
     type=int,
-    help="Minimum sequence occurence of a sequence to be considered",
+    metavar="INT",
+    help="minimum occurence sequences to be considered [off]",
 )
 parser.add_argument(
     "--faa",
     action="store_true",
-    help="Create a fasta file of matched sequences. Default: False.",
+    help="dump a fasta file of matched sequences [false]",
 )
 parser.add_argument(
     "--filter",
     action="store_true",
-    help="Activate the removal of sequences that matches only the signal and"
-    + "/or proregions for a method. Default: False",
+    help="only keep sequences matching sig, pro and mat regions [false]",
 )
 parser.add_argument(
     "-a",
     "--all",
     action="store_true",
-    help="Display sequence without hits in output. Default: False.",
+    help="add unclassified sequences in result [false]",
 )
 parser.add_argument(
     "-j",
     "--cpus",
     type=int,
+    metavar="INT",
     default=1,
-    help="Specify the number of threads. Default: 1.",
+    help="number of threads [1]",
 )
 parser.add_argument(
     "--force",
     action="store_true",
-    help="Force re-use output directory. Default: Off.",
+    help="re-use output directory [false]",
 )
 parser.add_argument(
-    "-q", "--quiet", action="store_true", help="Decrease program verbosity"
+    "-q", "--quiet", action="store_true", help="decrease program verbosity"
 )
-parser.add_argument("--debug", action="store_true", help="Activate debug mode")
+parser.add_argument(
+    "-v", "--version", action="version", version="%(prog)s " + f"{VERSION}"
+)
+parser.add_argument(
+    "-h", "--help", action="help", help="show this help message and exit"
+)
+parser.add_argument("--debug", action="store_true", help=argparse.SUPPRESS)
 
 args = parser.parse_args()
 
