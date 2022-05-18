@@ -54,14 +54,6 @@ PRO_REGION = 2
 
 # Define command-line arguments----------------------------------------------
 # Top-level parser
-citation = """
-When using this program in your research, please cite
-
-    Koua D., Ebou A. and Dutertre S.,
-    Improved prediction of conopeptide superfamilies with ConoDictor 2.0,
-    Bioinformatics Advances 2021, doi:10.1093/bioadv.vbab011
-"""
-
 parser = argparse.ArgumentParser(
     prog="conodictor",
     usage="conodictor [options] <FILE>",
@@ -134,10 +126,10 @@ args = parser.parse_args()
 
 
 def main():
-    # Define start time
+    # Record start time
     startime = datetime.now()
 
-    # Handling db directory path specification
+    # Handling db directory path
     # Are we in a docker file ? If yes the ENV variable IS_DOCKER is True
     dbdir = ""
     try:
@@ -187,7 +179,7 @@ def main():
             os.mkdir(Path(args.out, "tmp"))
         else:
             err(
-                f"Your choosen output folder '{args.out}' already exist!"
+                f"Chosen output folder '{args.out}' already exist!"
                 + " Please change it using --out option or use --force"
                 + " to reuse it. "
             )
