@@ -42,7 +42,7 @@ import warnings
 
 AUTHOR = "Anicet Ebou and Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.3.3"
+VERSION = "2.3.4"
 
 # Some global variables
 UNKNOWN_FAM = "UNKNOWN"
