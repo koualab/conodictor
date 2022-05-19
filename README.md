@@ -16,7 +16,7 @@ Cone snails are among the richest sources of natural peptides with promising pha
 
 ConoDictor 2 is a standalone and user-friendly command-line program. We have updated the program originally published as a web server 10 years ago using novel and updated tools and algorithms and improved our classification models with new and higher quality sequences. ConoDictor 2 is now more accurate, faster, multiplatform, and able to deal with a whole cone snail venom gland transcriptome (raw reads or contigs) in a very short time.
 
-The only input ConoDictor 2 requires is the assembled transcriptome or the raw reads file either in DNA or amino acid: used alphabet is automatically recognized. ConoDictor 2 run predictions directly on the proteins file (submitted or dynamically generated) and tries to report the longest conopeptide  precursor-like sequence.
+The only input ConoDictor 2 requires is the assembled transcriptome or the raw reads file either in DNA or amino acid: the used alphabet is automatically recognized. ConoDictor 2 runs predictions directly on the proteins file (submitted or dynamically generated) and tries to report the longest conopeptide precursor-like sequence.
 
 ### Installation
 
@@ -89,32 +89,23 @@ poetry run conodictor -h
 
 * Type `conodictor -h` and it should output something like:
 
-```bash
-conodictor [FLAGS/OPTIONS] <file>
-Examples:
-	conodictor file.fa.gz
-	conodictor --out outfolder --cpus 4 --mlen 51 file.fa
-
-positional arguments:
-  file                  Specifies input file.
+```
+usage: conodictor [options] <FILE>
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -o OUT, --out OUT     Specify output folder.
-  --mlen MLEN           Set the minimum length of the sequence to be
-                        considered as a match
-  --ndup NDUP           Minimum sequence occurence of a sequence to be
-                        considered
-  --faa                 Create a fasta file of matched sequences. Default:
-                        False.
-  --filter              Activate the removal of sequences that matches only
-                        the signal and/or proregions. Default: False.
-  -a, --all             Display sequence without hits in output. Default:
-                        False.
-  -j CPUS, --cpus CPUS  Specify the number of threads. Default: 1.
-  --force               Force re-use output directory. Default: Off.
-  -q, --quiet           Decrease program verbosity
-  --debug               Activate debug mode
+  -o DIR, --out DIR   output result to DIR [ConoDictor]
+  --mlen INT          minimum length of sequences to be considered [off]
+  --ndup INT          minimum occurence sequences to be considered [off]
+  --faa               dump a fasta file of matched sequences [false]
+  --filter            only keep sequences matching sig, pro and mat regions [false]
+  -a, --all           add unclassified sequences in result [false]
+  -j INT, --cpus INT  number of threads [1]
+  --force             re-use output directory [false]
+  -q, --quiet         decrease program verbosity
+  -v, --version       show program's version number and exit
+  -h, --help          show this help message and exit
+
+Citation: Koua et al., 2021, Bioinformatics Advances
 ```
 
 
@@ -137,29 +128,6 @@ SEQ_ID_1,A,A,A
 SEQ_ID_2,B,D,CONFLICT B and D
 SEQ_ID_3,O1,O1,O1
 ...
-
-```
-
-## Command line options
-
-```
-General:
-         file              Specify input fasta file [required]
-
-Outputs:
-         -o, --out         Specify output folder.
-         --faa             Create a fasta file of matched sequences. Default: False.
-         -a, --all         Display sequence without hits in output. Default: False.
-         --force           Force re-use output directory. Default: Off.
-Computation:
-         -j, --cpus        Specify number of threads. Default: 1.
-         
-Setup:
-         -q, --quiet       Decrease verbosity
-         --debug           Activate debug mode
-
-Standard meta-options:
-         --help, -h    Print help and exit
 
 ```
 
