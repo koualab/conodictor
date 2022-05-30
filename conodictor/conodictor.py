@@ -38,6 +38,7 @@ import re
 import shutil
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import warnings
 
 AUTHOR = "Anicet Ebou and Dominique Koua"
@@ -129,6 +130,9 @@ def main():
     # Record start time
     startime = datetime.now()
 
+    # Create a temporary directory
+    conotemp = TemporaryDirectory()
+
     # Handling db directory path
     # Are we in a docker file ? If yes the ENV variable IS_DOCKER is True
     dbdir = ""
@@ -176,7 +180,6 @@ def main():
             warn(f"Reusing output directory {args.out}")
             shutil.rmtree(args.out)
             os.mkdir(args.out)
-            os.mkdir(Path(args.out, "tmp"))
         else:
             err(
                 f"Chosen output folder '{args.out}' already exist!"
@@ -187,7 +190,6 @@ def main():
     else:
         msg(f"Creating the output directory {args.out}")
         os.mkdir(args.out)
-        os.mkdir(Path(args.out, "tmp"))
 
     # Get current user name
     try:
@@ -253,7 +255,7 @@ def main():
     # Input sequence file manipulation---------------------------------------
     # Check if file is compressed and decompress it or return path of
     # uncompressed file
-    file_path = decompress_file(args.file)
+    file_path = decompress_file(args.file, conotemp)
 
     # Open fasta file (build file index)
     infa = pyfastx.Fasta(str(file_path))
@@ -322,21 +324,21 @@ def main():
 
     # Create a fasta file of sequence after filtering
     if args.ndup is not None:
-        with open(Path(args.out, "tmp", "filtfa.fa"), "w") as fih:
+        with open(Path(conotemp.name, "filtfa.fa"), "w") as fih:
             for kid in dupdata.keys():
                 fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
         fih.close()
 
         # Use the filtered file as input of further commands
-        final_file = Path(args.out, "tmp", "filtfa.fa")
+        final_file = Path(conotemp.name, "filtfa.fa")
     elif args.ndup is None and args.mlen is not None:
-        with open(Path(args.out, "tmp", "filtfa.fa"), "w") as fih:
+        with open(Path(conotemp.name, "filtfa.fa"), "w") as fih:
             for kid in seqids:
                 fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
         fih.close()
 
         # Use the filtered file as input of further commands
-        final_file = Path(args.out, "tmp", "filtfa.fa")
+        final_file = Path(conotemp.name, "filtfa.fa")
     else:
         # Use the unfiltered file as input of further commands
         final_file = inpath
@@ -345,13 +347,13 @@ def main():
     msg(f"Running HMM prediction using hmmsearch v{hmmsearch_version}")
 
     # Run hmmsearch
-    run_HMM(final_file, dbdir, cpus)
+    run_HMM(final_file, dbdir, cpus, conotemp)
 
     msg("Parsing hmmsearch result")
     hmmdict = defaultdict(lambda: defaultdict(list))
 
     # Second iteration over output file to get evalues and hsps
-    with open(Path(args.out, "tmp", "out.hmmer")) as hmmfile:
+    with open(Path(conotemp.name, "out.hmmer")) as hmmfile:
         for record in SearchIO.parse(hmmfile, "hmmer3-text"):
             hits = record.hits
             for hit in hits:
@@ -391,15 +393,15 @@ def main():
 
         # Run pfscan
         msg("Running PSSM prediction")
-        subfiles = os.listdir(os.path.join(args.out, "tmp", "file_parts"))
-        out_pssm = open(Path(args.out, "tmp", "out.pssm"), "a")
+        subfiles = os.listdir(os.path.join(conotemp.name, "file_parts"))
+        out_pssm = open(Path(conotemp.name, "out.pssm"), "a")
         for file in tqdm(
             subfiles,
             ascii=True,
             desc=msg("Running PSMM on each file..."),
         ):
             pssm_run = run_PSSM(
-                Path(args.out, "tmp", "file_parts", file), dbdir, cpus
+                Path(conotemp.name, "file_parts", file), dbdir, cpus
             )
             out_pssm.write(pssm_run.stdout.decode("utf-8"))
         out_pssm.close()
@@ -407,7 +409,7 @@ def main():
     else:
         pssm_run = run_PSSM(final_file, dbdir, cpus)
         msg("Parsing PSSM results")
-        with open(Path(args.out, "tmp", "out.pssm"), "w") as po:
+        with open(Path(conotemp.name, "out.pssm"), "w") as po:
             po.write(pssm_run.stdout.decode("utf-8"))
         po.close()
 
@@ -418,7 +420,7 @@ def main():
     pssmdict = defaultdict(lambda: defaultdict(list))
 
     # Second itteration over output file to get evalues and hsps
-    with open(Path(args.out, "tmp", "out.pssm")) as pssmfile:
+    with open(Path(conotemp.name, "out.pssm")) as pssmfile:
         rd = csv.reader(pssmfile, delimiter="\t")
         for row in rd:
             pssmdict[row[PSSM_SEQ_ID]][
@@ -576,9 +578,7 @@ def main():
     # Finishing -------------------------------------------------------------
     if not args.debug:
         msg("Cleaning around")
-
         try:
-            shutil.rmtree(Path(args.out, "tmp"))
             os.remove(Path(f"{args.file}.fxi"))
         except OSError:
             pass
@@ -643,8 +643,8 @@ def clear_dict(hdict, hmm):
     return hdict
 
 
-def decompress_file(filename):
-    file_stem = Path(args.out, "tmp", Path(filename).stem)
+def decompress_file(filename, conotemp):
+    file_stem = Path(conotemp.name, Path(filename).stem)
     file_type = get_file_type(filename)
     file_path = ""
 
@@ -1139,7 +1139,7 @@ def run_PSSM(file, dbdir, cpus):
     )
 
 
-def run_HMM(file, dbdir, cpus):
+def run_HMM(file, dbdir, cpus, conotemp):
     return subprocess.run(
         [
             "hmmsearch",
@@ -1149,14 +1149,14 @@ def run_HMM(file, dbdir, cpus):
             "0.1",
             "--noali",
             "-o",
-            Path(args.out, "tmp", "out.hmmer"),
+            Path(conotemp.name, "out.hmmer"),
             Path(dbdir, "conodictor.hmm"),
             file,
         ]
     )
 
 
-def split_file(file):
+def split_file(file, conotemp):
     infile = pyfastx.Fasta(file)
     parts_num = math.ceil(len(infile) / 25000)
     digit = len(str(parts_num))
@@ -1164,11 +1164,11 @@ def split_file(file):
 
     fhs = []
     name, suffix1 = os.path.splitext(os.path.basename(file))
-    os.mkdir(os.path.join(args.out, "tmp", "file_parts"))
+    os.mkdir(os.path.join(conotemp.name, "file_parts"))
 
     for i in range(1, parts_num + 1):
         subfile = f"{name}.{str(i).zfill(digit)}{suffix1}"
-        subfile = os.path.join(args.out, "tmp", "file_parts", subfile)
+        subfile = os.path.join(conotemp.name, "file_parts", subfile)
         fh = open(subfile, "w")
         fhs.append(fh)
 
