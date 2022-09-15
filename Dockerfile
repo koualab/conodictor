@@ -15,11 +15,12 @@ LABEL maintainer.email="anicet.ebou@gmail.com"
 
 # install dependencies
 RUN export DEBIAN_FRONTEND=noninteractive && \
-    apt-get update && \
+    apt-get update -y && \
     apt-get -y --no-install-recommends install \
     build-essential \
-    libpcre++-dev \
+    libpcre2-dev \
     gfortran \
+    libgfortran5 \
     ca-certificates \
     cmake \
     git \
