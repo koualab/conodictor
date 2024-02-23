@@ -64,6 +64,13 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument("file", help=argparse.SUPPRESS)
 parser.add_argument(
+    "-d",
+    "--dir",
+    type=str,
+    metavar="STR",
+    help="specify database path",
+)
+parser.add_argument(
     "-o",
     "--out",
     type=Path,
@@ -134,45 +141,11 @@ def main():
     conotemp = TemporaryDirectory()
 
     # Handling db directory path
-    # Are we in a docker file ? If yes the ENV variable IS_DOCKER is True
-    dbdir = ""
-    try:
-        # get env var telling if we are in docker
-        is_docker = os.environ["IS_DOCKER"]
-    except KeyError:
-        is_docker = False
+    if not args.dir:
+        print("Error: the path to the database folder (-d option) is not specified")
+        sys.exit(1)
 
-    if is_docker:
-        import tempfile
-
-        # path to hmm and pssm db
-        dbdir = "/usr/local/lib/python3.8/dist-packages/db"
-
-        # create a temp dir for matplotlib config
-        temp_dir = tempfile.TemporaryDirectory()
-        os.environ["MPLCONFIGDIR"] = temp_dir.name
-    else:
-        # find path to conodictor.py
-        bindir = Path(__file__).resolve().parent
-        try:
-            dbdir = (
-                # case when path is set by env variable
-                os.environ["CONODB"]
-                # case when app is installed by cloned repo
-                or Path(bindir, "db")
-                # case when app is installed through pip
-                or "/usr/local/lib/python3.8/dist-packages/db"
-            )
-        except KeyError:
-            print(
-                "Error: Models for predictions not found in $PATH. "
-                + "Please set CONODB environment variable to the path "
-                + "where models are stored."
-                + "Visit https://github.com/koualab/conodictor "
-                + "for more informations.",
-                file=sys.stderr,
-            )
-            sys.exit(ExitStatus.failure)
+    dbdir = args.dir
 
     # Handling output directory creation
     if os.path.isdir(args.out):
@@ -1156,7 +1129,7 @@ def run_HMM(file, dbdir, cpus, conotemp):
     )
 
 
-def split_file(file, conotemp):
+def split_file(file):
     infile = pyfastx.Fasta(file)
     parts_num = math.ceil(len(infile) / 25000)
     digit = len(str(parts_num))
@@ -1164,11 +1137,11 @@ def split_file(file, conotemp):
 
     fhs = []
     name, suffix1 = os.path.splitext(os.path.basename(file))
-    os.mkdir(os.path.join(conotemp.name, "file_parts"))
+    os.mkdir(os.path.join(args.out, "tmp", "file_parts"))
 
     for i in range(1, parts_num + 1):
         subfile = f"{name}.{str(i).zfill(digit)}{suffix1}"
-        subfile = os.path.join(conotemp.name, "file_parts", subfile)
+        subfile = os.path.join(args.out, "tmp", "file_parts", subfile)
         fh = open(subfile, "w")
         fhs.append(fh)
 
