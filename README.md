@@ -11,7 +11,7 @@
 
 
 ### Important
-If using conodictor and have issue like [CONODB issue](#18), please update to v2.3.6 that provide a fix.
+If using conodictor and have issue like [CONODB issue](https://github.com/koualab/conodictor/issues/18), please update to v2.3.6 that provide a fix.
 
 conodictor v2.3.6 introduce the -d option to specify the path to the db folder containing HMM and PSSM files for classification.
 
