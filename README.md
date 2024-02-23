@@ -10,6 +10,13 @@
 ## ConoDictor: A fast and accurate prediction and classification tool for conopeptides
 
 
+### Important
+If using conodictor and have issue like [CONODB issue](#18), please update to v2.3.6 that provide a fix.
+
+conodictor v2.3.6 introduce the -d option to specify the path to the db folder containing HMM and PSSM files for classification.
+
+This is a temporary solution while I am working on the next big release. Thanks.
+
 ### Introduction
 
 Cone snails are among the richest sources of natural peptides with promising pharmacological and therapeutic applications. With the reduced costs of RNAseq, scientists now heavily rely on venom gland transcriptomes for the mining of novel bioactive conopeptides, but the bioinformatic analyses often hamper the discovery process.
