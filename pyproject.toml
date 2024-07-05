@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "conodictor"
-version = "2.3.6"
+version = "2.4"
 description = "Prediction and classification of conopeptides"
 authors = ["Anicet Ebou <anicet.ebou@gmail.com>", "Dominique Koua <dominique.koua@inphb.ci>"]
 maintainers = ["Anicet Ebou <anicet.ebou@gmail.com>"]
@@ -33,6 +33,8 @@ matplotlib = "^3.5.1"
 pandas = "^1.3.5"
 pyfastx = "^0.8.4"
 exitstatus = "^2.2.0"
+pyhmmer = "^0.10.13"
+xphyle = "^4.4.4"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^4.0.1"
@@ -40,6 +42,9 @@ black = "^21.12b0"
 
 [tool.poetry.scripts]
 conodictor = "conodictor.conodictor:main"
+
+[tool.ruff.lint]
+select = ["ALL"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
