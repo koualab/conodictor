@@ -15,17 +15,15 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import contextlib
 import datetime
-import importlib.resources
 import logging
 import os
 import platform
 import sys
 from pathlib import Path
 
-import psutil
 import pyfastx
-import pyhmmer
 
 from . import cli, conolib
 
@@ -34,9 +32,11 @@ URL = "https://github.com/koualab/conodictor.git"
 VERSION = "2.4"
 
 # Some global variables
-UNKNOWN_FAM = "UNKNOWN"
 CONFLICT_FAM = "CONFLICT"
 PSSM_SEQ_ID = 3
+CONOPEP_FAMILY = 0
+CONOPEP_FAMILY_NAME = 1
+PRO_REGION = 2
 
 # Define command-line arguments----------------------------------------------
 args = cli.args
@@ -54,6 +54,7 @@ def main() -> None:
     """Contains main program of conodictor."""
     # Record start time
     startime = datetime.datetime.now(tz=datetime.timezone.utc)
+    seqdata = None
     # Start program ---------------------------------------------------------
     logging.info("This is conodictor %s", VERSION)
     logging.info("Written by %s", AUTHOR)
@@ -71,7 +72,9 @@ def main() -> None:
     logging.info("Operating system is %s", platform.system())
 
     # Decompressing input file if needed
-    uncompressed_input = conolib.decompress_file(str(args.file.name))
+    if not Path.exists(args.out):
+        Path.mkdir(args.out)
+    uncompressed_input = conolib.decompress_file(str(args.file.name), args.out)
 
     # Check input for various potential problems
     check = conolib.check_input(Path(uncompressed_input))
@@ -86,8 +89,8 @@ def main() -> None:
     logging.info("We will use maximum of %s cores", cpus)
 
     # Translating sequences if needed
-    fa = pyfastx.Fasta(uncompressed_input)
-    fatype = conolib.isdnaorproteins(fa[0].seq)
+    first_fasta_sequence = conolib.read_first_fasta_record(Path(uncompressed_input))
+    fatype = conolib.isdnaorproteins(first_fasta_sequence)
     if fatype == "DNA":
         logging.info("Translating sequences into 6 frames")
         # translate sequences
@@ -100,46 +103,127 @@ def main() -> None:
         seqdata = Path(uncompressed_input)
 
     hres = {}
+    infile = pyfastx.Fasta(str(seqdata))
+    seqids = infile.keys()
+    # If --ndup is specified, get sequence ids of duplicate sequence
+    dupdata = {}
+    if args.ndup:
+        dupdata = conolib.get_dup_seqs(infile, seqids, args.ndup)
+        ldu = len(dupdata)
+        if args.mlen is None:
+            logging.info(
+                "Input file contains %s sequences with at least %s occurences."
+                " Only these sequences will be used for prediction.",
+                ldu,
+                args.ndup,
+            )
+        elif ldu == 0:
+            logging.info("We have 0 sequences with at least %s occurences.", args.ndup)
+            logging.info("No prediction will therefore be made. Stopping...")
+            sys.exit(1)
+        else:
+            logging.info(
+                "And from them we have %s sequences with at least %s occurences",
+                len(dupdata),
+                args.ndup,
+            )
+            logging.info("Only these sequences will be used for prediction")
+
+    # Create a fasta file of sequence after filtering
+    if args.ndup is not None:
+        with Path.open(Path(args.out, "filtfa.fa"), "w") as fih:
+            for kid in dupdata:
+                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
+        fih.close()
+
+        # Use the filtered file as input of further commands
+        seqdata = Path(args.out, "filtfa.fa")
+    elif args.ndup is None and args.mlen is not None:
+        with Path.open(Path(args.out, "filtfa.fa"), "w") as fih:
+            for kid in seqids:
+                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
+        fih.close()
+
+        # Use the filtered file as input of further commands
+        seqdata = Path(args.out, "filtfa.fa")
 
     # HMM search pipeline
     logging.info("Classifying sequences into conotoxins superfamilies")
-    logging.info("Step 1. using hidden Markov models")
-    available_memory = psutil.virtual_memory().available
-    target_size = Path.stat(seqdata).st_size
-    hmm = importlib.resources.files("conodictor").joinpath("conodictor.hmm").open("rb")
-
-    with pyhmmer.plan7.HMMFile(hmm) as hmm_file, pyhmmer.easel.SequenceFile(  # type: ignore[type-supported]
-        seqdata,
-        digital=True,
-    ) as seq_file:
-        if target_size < available_memory * 0.1:
-            logging.info("Pre-fetching hidden Markov models database into memory")
-            targets = seq_file.read_block()
-            mem = sys.getsizeof(targets) + sum(
-                sys.getsizeof(target) for target in targets
-            )
-            mem = mem / 1024
-            logging.info("Database in-memory size: %s KiB", f"{mem:.1f}")
-        else:
-            targets = seq_file
-        logging.info(
-            "Searching hidden markov models profiles against the sequences",
-        )
-        conolib.search_hmm_profiles(hres, hmm_file, cpus, targets)
+    logging.info(
+        "Searching hidden markov models profiles against the sequences",
+    )
+    conolib.run_hmm(seqdata, hres, cpus)
 
     logging.info("Parsing result")
     new_dict = conolib.transform_hmm_result(hres)
-
-    # Compute the combined evalue for each fam and find the maximum combined evalue
     logging.info("Compute combined evalue for each superfamily")
     results = conolib.compute_combined_evalue(new_dict)
+    logging.info("Predicting sequence superfamily base on HMM")
+    hmmfam = conolib.get_hmm_superfamily(results)
 
-    # Compare combined_evalues
-    logging.info("Predicting sequence superfamily")
-    seqfam = conolib.get_hmm_superfamily(results)
-    print(seqfam)
+    # PSSM search pipeline
+    logging.info("Running PSSM prediction")
+    pssm_out = conolib.run_pssm(seqdata, args.out, cpus)
+    logging.info("Parsing PSSM result")
+    pssmdict = conolib.parse_pssm_result(pssm_out)
+    pssmdict = conolib.clear_dict(pssmdict)
+    logging.info("Predicting sequence superfamily base on PSSM")
+    pssmfam = conolib.get_pssm_fam(pssmdict)
 
+    # Writing output---------------------------------------------------------
+    logging.info("Writing output")
+
+    # Final families dict to store both predicted families
+    finalfam = conolib.get_final_superfamilies(hmmfam, pssmfam, seqids)
+
+    # Enter "reads" mode
+    if args.mlen:
+        conolib.write_result_read_mode(
+            Path(args.out, "summary.csv"),
+            seqdata,
+            dupdata,
+            finalfam,
+            args.filter,
+            report_all_seqs=args.all,
+        )
+    # "Transcriptome mode"
+    else:
+        conolib.write_result_transcriptome_mode(
+            Path(args.out, "summary.csv"),
+            finalfam,
+            args.filter,
+            report_all_seqs=args.all,
+        )
+
+    # Finishing -------------------------------------------------------------
+    if not args.debug:
+        logging.info("Cleaning around")
+        with contextlib.suppress(OSError):
+            Path.unlink(Path(args.out, seqdata))
+            Path.unlink(Path(args.out, f"{seqdata}.fxi"))
+            Path.unlink(Path(args.out, "out.pssm"))
+
+    logging.info("Creating donut plot")
+    if args.mlen:
+        conolib.donut_graph(
+            6,
+            Path(args.out, "summary.csv"),
+            Path(args.out, "superfamilies_distribution.png"),
+        )
+    else:
+        conolib.donut_graph(
+            3,
+            Path(args.out, "summary.csv"),
+            Path(args.out, "superfamilies_distribution.png"),
+        )
+    logging.info("Done creating donut plot")
+    logging.info("Classification finished successfully")
+    logging.info("Check %s folder for results", args.out)
     logging.info("Walltime used (hh:mm:ss.ms): %s", conolib.elapsed_since(startime))
+    if len(seqids) % 2:
+        logging.info("Nice to have you. Share, enjoy and come back!")
+    else:
+        logging.info("Thanks you, come again.")
 
 
 if __name__ == "__main__":

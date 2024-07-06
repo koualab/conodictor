@@ -35,6 +35,7 @@ pyfastx = "^0.8.4"
 exitstatus = "^2.2.0"
 pyhmmer = "^0.10.13"
 xphyle = "^4.4.4"
+lightmotif = "^0.8.0"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^4.0.1"

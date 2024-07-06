@@ -514,6 +514,61 @@ files = [
 ]
 
 [[package]]
+name = "lightmotif"
+version = "0.8.0"
+description = "PyO3 bindings and Python interface to lightmotif, a library for platform-accelerated biological motif scanning using position weight matrices."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "lightmotif-0.8.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:a0c363375975e38976299e5a21e658aa924c52b270981688cac14e60d813de2d"},
+    {file = "lightmotif-0.8.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:b71bc5907759da8bd652714f568056d836aa04451d9d6438c218b22a6c882b3b"},
+    {file = "lightmotif-0.8.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d9637d12151d74faf15c20b387e3d03498f2a1bf4e37e6a24e859356316085a8"},
+    {file = "lightmotif-0.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:85e3bd1a7cda46a2fac179deac2825fc857679b71a5b96ad666da1b896c91861"},
+    {file = "lightmotif-0.8.0-cp310-cp310-win_amd64.whl", hash = "sha256:622e000a1547d56c188e33bb8c27b7b36dc5b7e1cde3a8f3807eec066594bfe7"},
+    {file = "lightmotif-0.8.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:d69645cff262d50bc761132ac1a9c50724bcd935364ad9c1b08395ce40fc775d"},
+    {file = "lightmotif-0.8.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:49efb88274d203431ab75532dae9d3f632e5155d1b55405800a1ce0fb6b86bf6"},
+    {file = "lightmotif-0.8.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c93d7364e735177ada908a54f8bb71fbfe3ca333750a9cf891feb3ceb4bb6a36"},
+    {file = "lightmotif-0.8.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f1b3cd03ee00298de687e72e79db30b6184d04131b40a8b1bb4273e98e76ebec"},
+    {file = "lightmotif-0.8.0-cp311-cp311-win_amd64.whl", hash = "sha256:010c6e5878c066da1e03ee6c01717232124a6e6595073ea6e6c68f1a0c48c50d"},
+    {file = "lightmotif-0.8.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:45746815de2e95d3a2c2767ee2280586823d4a6e92d9415a4efe129289b8f8a6"},
+    {file = "lightmotif-0.8.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:76875c1d1671d9351cfcc06dd73bd7caa691ad080d7242631df1ebb8ea8f0392"},
+    {file = "lightmotif-0.8.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0c4268f24a488955ccfcad0c3492cc17ab8188968bdb347195b82d37ea46070a"},
+    {file = "lightmotif-0.8.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:488899cdfa585b55390b402cedd7c982bd28d6dfc89e0c5288b0eb97597709c1"},
+    {file = "lightmotif-0.8.0-cp312-cp312-win_amd64.whl", hash = "sha256:9101342e1ab0a4ed4ddb4c699341a21fc406bebb4baba0fa28cf3cd3e1c371a1"},
+    {file = "lightmotif-0.8.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:e4006471630a5c297d18dabf57cc41b06423f2874b821d07c4aae271a2dd76db"},
+    {file = "lightmotif-0.8.0-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:472e73cfe04e9feecdec23c0dac1c10218dad2c920143d96646c3ba8a3ec92e8"},
+    {file = "lightmotif-0.8.0-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:525b93dffef34d4f9c8b6b5b9ee144f96e37cadf24cb7318c1587e0789bd49d0"},
+    {file = "lightmotif-0.8.0-cp37-cp37m-win_amd64.whl", hash = "sha256:db0941194de54d2e841efe2ffbe6421d19af6a7adb807439b86edf8bf32616ab"},
+    {file = "lightmotif-0.8.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:c8f939080aa8c77c27368ca6e42a6e453a06538659350a352512a11565e53a34"},
+    {file = "lightmotif-0.8.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:827def974da427124d9861341700072e9eda40e561bb485768e6ea06158287c0"},
+    {file = "lightmotif-0.8.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f7b73b17c5d092937718923141f932368b2c575a4d121e847f3d406cf42289a6"},
+    {file = "lightmotif-0.8.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:899c153748482a86a5a31d44f4ce8864cfe0b172cf25f5861265f265c638c405"},
+    {file = "lightmotif-0.8.0-cp38-cp38-win_amd64.whl", hash = "sha256:f35bb7ca84b4a8e3ea829d80f50266c3ae4066961280548fc940759988fe1ecf"},
+    {file = "lightmotif-0.8.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:2ec78c798ec5b64cb2ef99ae353644b87c6b8760b452249f2639ceb006efdfc0"},
+    {file = "lightmotif-0.8.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:71df30e3294d4f3b304cc6b65260cbab3902a50af4793b2466c57d4b093fb5b3"},
+    {file = "lightmotif-0.8.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d5fb4fe2de79723cee4315509da234bebdad7c8259a521947321265d2e0af228"},
+    {file = "lightmotif-0.8.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a4b3d1f05aa9dd76ced519be451350b87f252ff111cb808ef771d97ae4f052c1"},
+    {file = "lightmotif-0.8.0-cp39-cp39-win_amd64.whl", hash = "sha256:27af9b0354fc6032236cb66c8ff6a99e2e9d915dd3f8b53fae6e1e87dcfe6cbb"},
+    {file = "lightmotif-0.8.0-pp310-pypy310_pp73-macosx_10_15_x86_64.whl", hash = "sha256:2f422b559fb063a8daa8f7830168701297180e5a9cd21fa664f36939c945965a"},
+    {file = "lightmotif-0.8.0-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:facf4c3a075278e972b8f62c354219a8c1e6a331a7174249ccdb7d06f70c63fd"},
+    {file = "lightmotif-0.8.0-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e66eabd6c0c52075e9fe09e4c806bf6beff03587594a7b0e53109d0a19cceed8"},
+    {file = "lightmotif-0.8.0-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:a03e6c959c6a196f7ea5c97ead58a6815f51b8dd5697e729f915a461d0d845f7"},
+    {file = "lightmotif-0.8.0-pp37-pypy37_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e3190834ae3ef30d04a90cd35bc28031168354476bfe164e065bf7be56f3fabf"},
+    {file = "lightmotif-0.8.0-pp37-pypy37_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4f2d185f82770e870b8d9e5545edf6eecf1d579fb92f1f16710eacd0bbe9d733"},
+    {file = "lightmotif-0.8.0-pp37-pypy37_pp73-win_amd64.whl", hash = "sha256:f07136bf887037ee176a14db1ca04b212702635241c0f19f1c10812a6d99b184"},
+    {file = "lightmotif-0.8.0-pp38-pypy38_pp73-macosx_10_9_x86_64.whl", hash = "sha256:ea02098039b4819dae824aea63af79cc937bcb67c97ebf13b808766c1329c61c"},
+    {file = "lightmotif-0.8.0-pp38-pypy38_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6689cb1fb83809b52d569bf9c6146a4fe84b451aca6ee1a7f2626c50bf293adb"},
+    {file = "lightmotif-0.8.0-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d7ca7771ed2de366117f24d179c3ba8ee0392da59c4521f2fc37cd1b22005733"},
+    {file = "lightmotif-0.8.0-pp38-pypy38_pp73-win_amd64.whl", hash = "sha256:a6d1977587178251fb3aa4a37d760c247c403a3bfe935e103963a3982dda2a67"},
+    {file = "lightmotif-0.8.0-pp39-pypy39_pp73-macosx_10_15_x86_64.whl", hash = "sha256:7fa8d8d184ad231805f4214429db524cff2ec58fa6065faac7dbb3a1f7305962"},
+    {file = "lightmotif-0.8.0-pp39-pypy39_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9067641a0ec54fb18e348c67e7387108412260b0719fee7e44a5009a8ecab215"},
+    {file = "lightmotif-0.8.0-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4a4113a6db2c7e474bb6e5d612d64cd4660da97bc5861544bb7f40c675178d8e"},
+    {file = "lightmotif-0.8.0-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:d2ff03f1593d53e1f859406c34d1a721d4fe22c90fbcc2312124dcf364329f1c"},
+    {file = "lightmotif-0.8.0.tar.gz", hash = "sha256:53c5cdb14e925e46f95482957c49c76f371e70b9e9f75916816884d6e35a3ed9"},
+]
+
+[[package]]
 name = "matplotlib"
 version = "3.7.2"
 description = "Python plotting package"
@@ -1207,4 +1262,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "bd5ed3face343e9d28c886fe5da2616d72847fe7d4c58e59996a25513ffcfe4f"
+content-hash = "1afb270969e153bd091fd369d691f1dbe30443133ce5c622d4a2f480b74aeff9"
