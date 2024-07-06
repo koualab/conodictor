@@ -52,7 +52,7 @@ def is_min_occurence_activated(
     # If --ndup is specified, get sequence ids of duplicate sequence
     dupdata = {}
     if min_occ:
-        dupdata = get_dup_seqs(infile, seqids, min_occ)
+        dupdata = get_dup_seqs(seqdata, seqids, min_occ)
         ldu = len(dupdata)
         if min_len is None:
             logging.info(
@@ -166,7 +166,7 @@ def parse_pssm_result(pssm_result: Path) -> defaultdict:
 
 
 def write_result_read_mode(
-    out: Path,
+    out: str,
     seqdata: Path,
     data: dict,
     *,
@@ -182,7 +182,6 @@ def write_result_read_mode(
     report_all_seqs: Boolean flag to report all sequences.
 
     """
-    infile = pyfastx.Fasta(str(seqdata))
     outfile_path = Path(out, "summary.csv")
 
     uniq_final = select_filter(data["program"], data["finalfam"])
@@ -194,7 +193,7 @@ def write_result_read_mode(
         )
 
         def write_sequence(sequence_id: str, sequence_data: list) -> None:
-            length, num_cysteines = get_stats(sequence_id, infile)
+            length, num_cysteines = get_stats(sequence_id, str(seqdata))
             occurence = data["dupdata"].get(sequence_id, 1)
             outfile.write(
                 f"{sequence_id},{length},{num_cysteines},{occurence},"
@@ -302,7 +301,7 @@ def donut_graph(ncol: int, stat_file: Path, outfile: Path) -> None:
         plt.close(fig)  # Close the figure to avoid resource warning
 
 
-def get_stats(seqid: str, file_path: Path) -> list[int]:
+def get_stats(seqid: str, file_path: str) -> list[int]:
     """get_stats return sequence length and number of cysteines in a sequences for a sequence id.
 
     Args:
@@ -337,7 +336,7 @@ def get_dup_seqs(file_path: Path, idslist: list[str], mnoc: int) -> dict:
 
     """  # noqa: E501
     dupid = {}
-    infile = pyfastx.Fasta(file_path)
+    infile = pyfastx.Fasta(str(file_path))
     flipped = defaultdict(list)
 
     # Create flipped dictionary directly from infile

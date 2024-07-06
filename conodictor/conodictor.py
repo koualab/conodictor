@@ -148,7 +148,7 @@ def main() -> None:
     # Enter "reads" mode
     if args.mlen:
         conolib.write_result_read_mode(
-            Path(args.out, "summary.csv"),
+            args.out,
             seqdata,
             {"dupdata": dupdata, "finalfam": finalfam, "program": args.filter},
             report_all_seqs=args.all,
