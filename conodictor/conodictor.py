@@ -31,13 +31,6 @@ AUTHOR = "Anicet Ebou and Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
 VERSION = "2.4"
 
-# Some global variables
-CONFLICT_FAM = "CONFLICT"
-PSSM_SEQ_ID = 3
-CONOPEP_FAMILY = 0
-CONOPEP_FAMILY_NAME = 1
-PRO_REGION = 2
-
 # Define command-line arguments----------------------------------------------
 args = cli.args
 
@@ -51,7 +44,7 @@ logging.basicConfig(
 
 
 def main() -> None:
-    """Contains main program of conodictor."""
+    """Predict and classify conopeptides in conotoxins superfamilies."""
     # Record start time
     startime = datetime.datetime.now(tz=datetime.timezone.utc)
     seqdata = None
@@ -106,46 +99,12 @@ def main() -> None:
     infile = pyfastx.Fasta(str(seqdata))
     seqids = infile.keys()
     # If --ndup is specified, get sequence ids of duplicate sequence
-    dupdata = {}
-    if args.ndup:
-        dupdata = conolib.get_dup_seqs(infile, seqids, args.ndup)
-        ldu = len(dupdata)
-        if args.mlen is None:
-            logging.info(
-                "Input file contains %s sequences with at least %s occurences."
-                " Only these sequences will be used for prediction.",
-                ldu,
-                args.ndup,
-            )
-        elif ldu == 0:
-            logging.info("We have 0 sequences with at least %s occurences.", args.ndup)
-            logging.info("No prediction will therefore be made. Stopping...")
-            sys.exit(1)
-        else:
-            logging.info(
-                "And from them we have %s sequences with at least %s occurences",
-                len(dupdata),
-                args.ndup,
-            )
-            logging.info("Only these sequences will be used for prediction")
-
-    # Create a fasta file of sequence after filtering
-    if args.ndup is not None:
-        with Path.open(Path(args.out, "filtfa.fa"), "w") as fih:
-            for kid in dupdata:
-                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
-        fih.close()
-
-        # Use the filtered file as input of further commands
-        seqdata = Path(args.out, "filtfa.fa")
-    elif args.ndup is None and args.mlen is not None:
-        with Path.open(Path(args.out, "filtfa.fa"), "w") as fih:
-            for kid in seqids:
-                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
-        fih.close()
-
-        # Use the filtered file as input of further commands
-        seqdata = Path(args.out, "filtfa.fa")
+    dupdata = conolib.is_min_occurence_activated(
+        args.ndup,
+        args.mlen,
+        seqdata,
+        args.out,
+    )
 
     # HMM search pipeline
     logging.info("Classifying sequences into conotoxins superfamilies")
@@ -181,9 +140,7 @@ def main() -> None:
         conolib.write_result_read_mode(
             Path(args.out, "summary.csv"),
             seqdata,
-            dupdata,
-            finalfam,
-            args.filter,
+            {"dupdata": dupdata, "finalfam": finalfam, "program": args.filter},
             report_all_seqs=args.all,
         )
     # "Transcriptome mode"
@@ -199,8 +156,8 @@ def main() -> None:
     if not args.debug:
         logging.info("Cleaning around")
         with contextlib.suppress(OSError):
-            Path.unlink(Path(args.out, seqdata))
-            Path.unlink(Path(args.out, f"{seqdata}.fxi"))
+            Path.unlink(seqdata)
+            Path.unlink(Path(f"{seqdata}.fxi"))
             Path.unlink(Path(args.out, "out.pssm"))
 
     logging.info("Creating donut plot")

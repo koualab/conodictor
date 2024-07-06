@@ -9,7 +9,6 @@ import importlib.resources
 import logging
 import operator
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -19,7 +18,6 @@ from functools import reduce
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pandas as pd
 import psutil
 import pyfastx
@@ -42,19 +40,84 @@ CONOPEP_FAMILY_NAME = 1
 PRO_REGION = 2
 
 
+def is_min_occurence_activated(
+    min_occ: int,
+    min_len: int,
+    seqdata: Path,
+    out: str,
+) -> dict:
+    """Return duplicated sequence stats."""
+    infile = pyfastx.Fasta(str(seqdata))
+    seqids = infile.keys()
+    # If --ndup is specified, get sequence ids of duplicate sequence
+    dupdata = {}
+    if min_occ:
+        dupdata = get_dup_seqs(infile, seqids, min_occ)
+        ldu = len(dupdata)
+        if min_len is None:
+            logging.info(
+                "Input file contains %s sequences with at least %s occurences."
+                " Only these sequences will be used for prediction.",
+                ldu,
+                min_occ,
+            )
+        elif ldu == 0:
+            logging.info("We have 0 sequences with at least %s occurences.", min_occ)
+            logging.info("No prediction will therefore be made. Stopping...")
+            sys.exit(1)
+        else:
+            logging.info(
+                "And from them we have %s sequences with at least %s occurences",
+                len(dupdata),
+                min_occ,
+            )
+            logging.info("Only these sequences will be used for prediction")
+
+    # Create a fasta file of sequence after filtering
+    if min_occ is not None:
+        with Path.open(Path(out, "filtfa.fa"), "w") as fih:
+            for kid in dupdata:
+                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
+        fih.close()
+
+        # Use the filtered file as input of further commands
+        seqdata = Path(out, "filtfa.fa")
+    elif min_occ is None and min_len is not None:
+        with Path.open(Path(out, "filtfa.fa"), "w") as fih:
+            for kid in seqids:
+                fih.write(f">{infile[kid].description}\n{infile[kid].seq}\n")
+        fih.close()
+
+        # Use the filtered file as input of further commands
+        seqdata = Path(out, "filtfa.fa")
+
+    return dupdata
+
+
+def get_fam_or_unknown(seqid: str, hmmfam: dict, pssmfam: dict) -> list[str]:
+    """Helper function to get family or unknown."""  # noqa: D401
+    return [
+        hmmfam.get(seqid, "UNKNOWN"),
+        pssmfam.get(seqid, "UNKNOWN"),
+        definitive_prediction(
+            hmmfam.get(seqid, "UNKNOWN"),
+            pssmfam.get(seqid, "UNKNOWN"),
+        ),
+    ]
+
+
 def get_final_superfamilies(hmmfam: dict, pssmfam: dict, seqids: list) -> defaultdict:
     """Get final superfamilies."""
-    # Final families dict to store both predicted families
     finalfam = defaultdict(list)
 
-    # Itterate through all submitted sequence to assign families
-    known_seqs = []
-    known_seqs.extend([*hmmfam])
-    known_seqs.extend([*pssmfam])
+    # Collect all known sequence IDs
+    known_seqs = set(hmmfam) | set(pssmfam)
 
+    # Assign families to known sequences
     for seqid in known_seqs:
-        finalfam[seqid].extend(get_fam_or_unknown(seqid, hmmfam, pssmfam))
+        finalfam[seqid] = get_fam_or_unknown(seqid, hmmfam, pssmfam)
 
+    # Assign "UNKNOWN" to unknown sequences
     for sid in seqids:
         if sid not in finalfam:
             finalfam[sid] = ["UNKNOWN", "UNKNOWN", "UNKNOWN"]
@@ -105,43 +168,45 @@ def parse_pssm_result(pssm_result: Path) -> defaultdict:
 def write_result_read_mode(
     out: Path,
     seqdata: Path,
-    dupdata: dict,
-    finalfam: defaultdict,
-    program: str,
+    data: dict,
     *,
     report_all_seqs: bool,
 ) -> None:
-    """Write result to output in read mode."""
-    infile = pyfastx.Fasta(str(seqdata))
-    outfile = Path.open(Path(out, "summary.csv"), "w")
-    uniq_final = select_filter(program, finalfam)
-    # write summary.txt file with sequence stats
-    outfile.write(
-        "sequence,length,num_cysteines,occurence,"
-        "hmm_pred,pssm_pred,definitive_pred\n",
-    )
+    """Write result to output in read mode.
 
-    if not report_all_seqs:
-        for uk, uv in uniq_final.items():
+    Args:
+    ----
+    out: Output directory path.
+    seqdata: Path to sequence data.
+    data: Dictionary containing `dupdata`, `finalfam`, and `program`.
+    report_all_seqs: Boolean flag to report all sequences.
+
+    """
+    infile = pyfastx.Fasta(str(seqdata))
+    outfile_path = Path(out, "summary.csv")
+
+    uniq_final = select_filter(data["program"], data["finalfam"])
+
+    with Path.open(outfile_path, "w") as outfile:
+        outfile.write(
+            "sequence,length,num_cysteines,occurence,"
+            "hmm_pred,pssm_pred,definitive_pred\n",
+        )
+
+        def write_sequence(sequence_id: str, sequence_data: list) -> None:
+            length, num_cysteines = get_stats(sequence_id, infile)
+            occurence = data["dupdata"].get(sequence_id, 1)
             outfile.write(
-                (
-                    f"{uk},{get_stats(uk, infile)[0]},"
-                    f"{get_stats(uk, infile)[1]},"
-                    f"{dupdata[uk]},{uv[0]},{uv[1]},{uv[2]}\n"
-                ),
+                f"{sequence_id},{length},{num_cysteines},{occurence},"
+                f"{sequence_data[0]},{sequence_data[1]},{sequence_data[2]}\n",
             )
-        outfile.close()
-    else:
-        for k, v in finalfam.items():
-            outfile.write(
-                (
-                    f"{k},{get_stats(k, infile)[0]},"
-                    f"{get_stats(k, infile)[1]},"
-                    f"{dupdata[k]},"
-                    f"{v[0]},{v[1]},{v[2]}\n"
-                ),
-            )
-        outfile.close()
+
+        if report_all_seqs:
+            for seq_id, seq_data in data["finalfam"].items():
+                write_sequence(seq_id, seq_data)
+        else:
+            for seq_id, seq_data in uniq_final.items():
+                write_sequence(seq_id, seq_data)
 
 
 def write_result_transcriptome_mode(
@@ -152,84 +217,97 @@ def write_result_transcriptome_mode(
     report_all_seqs: bool,
 ) -> None:
     """Write result to output in transcriptome mode."""
-    outfile = Path.open(Path(out, "summary.csv"), "w")
     uniq_final = select_filter(program, finalfam)
 
-    # Open output file for writing
-    outfile.write("sequence,hmm_pred,pssm_pred,definitive_pred\n")
-    # Make reporting unclassified sequences optional
-    if not report_all_seqs:
-        # Write output
-        for uk, uv in uniq_final.items():
-            outfile.write(
-                f"{uk},{uv[0]},{uv[1]},{uv[2]}\n",
-            )
-        outfile.close()
-    else:
-        for k, v in finalfam.items():
+    with Path.open(out, "w") as outfile:
+        outfile.write("sequence,hmm_pred,pssm_pred,definitive_pred\n")
+        data_to_write = finalfam.items() if report_all_seqs else uniq_final.items()
+
+        for k, v in data_to_write:
             outfile.write(f"{k},{v[0]},{v[1]},{v[2]}\n")
-        outfile.close()
 
 
-def select_filter(program: str, mydict: dict) -> dict:
-    """Filter result by program."""
-    uniq_final = {}
-    # Get final sequences which has been classified
-    if program == "pssm":
-        uniq_final = {
-            k: v
-            for k, v in mydict.items()
-            if v != ["UNKNOWN", "UNKNOWN", "UNKNOWN"]
-            if v[0] != "UNKNOWN"
-        }
-    elif program == "hmm":
-        uniq_final = {
-            k: v
-            for k, v in mydict.items()
-            if v != ["UNKNOWN", "UNKNOWN", "UNKNOWN"]
-            if v[1] != "UNKNOWN"
-        }
-    else:
-        uniq_final = {
+def select_filter(profile: str, mydict: dict) -> dict:
+    """Filter result by program.
+
+    Args:
+    ----
+    profile: type of profile. Either HMM or PSSM
+    mydict: dictionary of classifications
+
+    Returns:
+    -------
+    A dict with the unknown superfamilies removed
+
+    """
+    if profile not in {"pssm", "hmm"}:
+        return {
             k: v for k, v in mydict.items() if v != ["UNKNOWN", "UNKNOWN", "UNKNOWN"]
         }
-    return uniq_final
+
+    index = 0 if profile == "pssm" else 1
+    return {
+        k: v
+        for k, v in mydict.items()
+        if v != ["UNKNOWN", "UNKNOWN", "UNKNOWN"] and v[index] != "UNKNOWN"
+    }
 
 
 def donut_graph(ncol: int, stat_file: Path, outfile: Path) -> None:
-    """donut_graph make a donut graph from outputed stats of predicted sequences."""
-    data = pd.read_csv(stat_file)
-    plot_data = data[data.columns[ncol]].tolist()
-    dtc = Counter(plot_data)
-    labels = [
-        f"{k1}: {v1}"
-        for k1, v1 in sorted(dtc.items())
-        if not k1.startswith(("CONFLICT", "UNKNOWN"))
-    ]
-    values = [
-        x for k2, x in sorted(dtc.items()) if not k2.startswith(("CONFLICT", "UNKNOWN"))
-    ]
+    """Create a donut graph from the outputted stats of predicted sequences.
 
-    # White circle
-    _, ax = plt.subplots(figsize=(13, 10), subplot_kw={"aspect": "equal"})
+    Args:
+    ----
+    ncol: The column number in the CSV file to use for the graph.
+    stat_file: Path to the CSV file containing the statistics.
+    outfile: Path to save the output graph.
+
+    """
+    # Read the CSV file and extract the relevant column data
+    data = pd.read_csv(stat_file)
+    plot_data = data.iloc[:, ncol].tolist()
+
+    # Count occurrences of each unique value in the column
+    dtc = Counter(plot_data)
+
+    # Filter out "CONFLICT" and "UNKNOWN" entries from labels and values
+    filtered_items = [
+        (k, v)
+        for k, v in sorted(dtc.items())
+        if not k.startswith(("CONFLICT", "UNKNOWN"))
+    ]
+    labels = [f"{k}: {v}" for k, v in filtered_items]
+    values = [v for _, v in filtered_items]
+
+    # Create the donut plot
+    fig, ax = plt.subplots(figsize=(13, 10), subplot_kw={"aspect": "equal"})
     wedges, _ = ax.pie(  # type: ignore[type-supported]
-        np.array(values).ravel(),
+        values,
         wedgeprops={"width": 0.5},
         startangle=-40,
         shadow=False,
     )
-    # bbox: x, y, width, height
+
+    # Add legend and title
     ax.legend(wedges, labels, loc="lower center", ncol=6)
     ax.set_title("ConoDictor Predictions")
+
+    # Add version text
     plt.text(-2, -1.5, f"Made with ConoDictor v{VERSION}")
+
+    # Save the figure
     plt.savefig(outfile, dpi=300)
+    plt.close(fig)  # Close the figure to avoid resource warning
 
 
 def get_stats(seqid: str, file_path: Path) -> list[int]:
     """get_stats return sequence length and number of cysteines in a sequences for a sequence id.
 
-    :id: Input sequence id list.
-    :infile: Fasta file to use to retrieve sequence.
+    Args:
+    ----
+    seqid: Input sequence id list.
+    file_path: Fasta file to use to retrieve sequence.
+
     """  # noqa: E501
     stats = []
     infile = pyfastx.Fasta(file_path)
@@ -243,28 +321,29 @@ def get_stats(seqid: str, file_path: Path) -> list[int]:
 
 
 def get_dup_seqs(file_path: Path, idslist: list[str], mnoc: int) -> dict:
-    """get_dup_seqs search provided fasta file for duplicate sequence.
+    """Search provided fasta file for duplicate sequences and return sequence ids of duplicate sequences.
 
-    Return sequence ids of duplicate sequences.
+    Args:
+    ----
+    file_path: Input fasta file to use for search.
+    idslist: Sequence ids list to consider.
+    mnoc: Minimum number of occurrences wanted.
 
-    :infile: Input fasta file to use for search
-    :idslist: Sequence ids list to consider
-    :mnoc: Minimum number of occurence wanted
-    """
+    Returns:
+    -------
+    A dictionary of sequence ids with their duplicate count.
+
+    """  # noqa: E501
     dupid = {}
     infile = pyfastx.Fasta(file_path)
-    flipped = defaultdict(set)
-    seqdict = defaultdict()
+    flipped = defaultdict(list)
+
+    # Create flipped dictionary directly from infile
     for sid in idslist:
-        seqdict[sid] = infile[sid].seq
+        seq = infile[sid].seq
+        flipped[seq].append(sid)
 
-    flipped = _flip_dict(seqdict)
-
-    # The flipped dict is a dict of list like: dict = {"ATCT": [id1, id2], "GCTA": [id4, id5]}  # noqa: E501
-    # returning only the first element of the value
-    # let us consider only one occurence of the sequence
-    # Therefore we will really only predict one sequence
-    # which can have multiple occurence
+    # Only consider sequences with enough duplicates
     for v in flipped.values():
         if len(v) >= mnoc:
             dupid[v[0]] = len(v)
@@ -272,108 +351,71 @@ def get_dup_seqs(file_path: Path, idslist: list[str], mnoc: int) -> dict:
     return dupid
 
 
-def _flip_dict(mydict: dict) -> defaultdict:
-    """Return a flipped dict of input dict."""
-    flipped_ = defaultdict(list)
-    for k, v in mydict.items():
-        if v not in flipped_:
-            flipped_[v] = [k]
-        else:
-            flipped_[v].append(k)
-
-    return flipped_
-
-
 def definitive_prediction(hmmclass: str, pssmclass: str) -> str:
-    """definitive_prediction gives definitive classification by combining HMM and PSSM.
+    """Combine HMM and PSSM predictions to give a definitive classification.
 
-    :hmmclass: HMM predicted family, required (string)
-    :pssmclass: PSSM predicted family, required (string)
+    Args:
+    ----
+    hmmclass: HMM predicted superfamily, required (string)
+    pssmclass: PSSM predicted superfamily, required (string)
+
+    Returns:
+    -------
+    The definitve classification string.
+
     """
-    deffam = None
-
     if hmmclass == pssmclass:
-        deffam = hmmclass
-    elif "CONFLICT" in pssmclass and "CONFLICT" in hmmclass:
-        fams_pssm = re.search("(?<=CONFLICT)(.*)and(.*)", pssmclass)
-        fams_hmm = re.search("(?<=CONFLICT)(.*)and(.*)", hmmclass)
-        deffam = f"CONFLICT {fams_pssm.group(1)}, {fams_pssm.group(2)}, {fams_hmm.group(1)}, and {fams_hmm.group(2)}"  # type: ignore[method-supported]  # noqa: E501
-    elif "CONFLICT" in pssmclass and "CONFLICT" not in hmmclass:
-        deffam = hmmclass
-    elif (
-        "CONFLICT" in hmmclass
-        and "CONFLICT" not in pssmclass
-        or "UNKNOWN" in hmmclass
-        and "UNKNOWN" not in pssmclass
+        return hmmclass
+
+    if "CONFLICT" in pssmclass and "CONFLICT" in hmmclass:
+        fams_pssm = pssmclass.replace("CONFLICT ", "").split(" and ")
+        fams_hmm = hmmclass.replace("CONFLICT ", "").split(" and ")
+        return f"CONFLICT {', '.join(fams_pssm + fams_hmm)}"
+
+    if "CONFLICT" in pssmclass and "CONFLICT" not in hmmclass:
+        return hmmclass
+
+    if ("CONFLICT" in hmmclass and "CONFLICT" not in pssmclass) or (
+        "UNKNOWN" in hmmclass and "UNKNOWN" not in pssmclass
     ):
-        deffam = pssmclass
-    elif "UNKNOWN" not in hmmclass and "UNKNOWN" in pssmclass:
-        deffam = hmmclass
-    elif pssmclass != hmmclass:
-        deffam = f"CONFLICT {hmmclass} and {pssmclass}"
+        return pssmclass
 
-    return deffam or ""
+    if "UNKNOWN" not in hmmclass and "UNKNOWN" in pssmclass:
+        return hmmclass
 
-
-def get_fam_or_unknown(seqid: str, hmmfam: dict, pssmfam: dict) -> list[str]:
-    """Get fam from both dict."""
-    fam = []
-    if seqid in hmmfam:
-        fam.append(hmmfam[seqid])
-    else:
-        fam.append("UNKNOWN")
-
-    if seqid in pssmfam:
-        fam.append(pssmfam[seqid])
-    else:
-        fam.append("UNKNOWN")
-
-    fam.append(definitive_prediction(fam[0], fam[1]))
-
-    return fam
+    return f"CONFLICT {hmmclass} and {pssmclass}"
 
 
 def get_pssm_fam(mdict: dict) -> dict:
-    """get_pssm_fam return the family based on pssm.
+    """Return the superfamily based on PSSM with the highest occurrence.
 
-    With the highest number of
-    occurence in PSSM profile match recorded as list for each
-    sequence id.
+    Args:
+    ----
+    mdict: Dictionary containing sequences and their associated families with matches.
 
-    >>> my_dict = {ID1: defaultdict(<class 'list'>,
-                                    { 'A' : ['SIG', 'MAT']},
-                                    {'B': ['MAT']}
-                                    ),
-                   ID2: defaultdict(<class 'list'>,
-                                    {'M': ['MAT']},
-                                    {'P': ['MAT']},
-                                    {'O1': ['PRO', 'MAT']}
-                                    )
-                   }
-    >>> get_pssm_fam(my_dict)
-    {ID1: 'A', ID2: 'O1'}
+    Returns:
+    -------
+    Dictionary mapping sequence IDs to the most common family based on PSSM matches.
 
-    :mdict: Dictionnary, required (dict)
     """
-    fam = ""
     pssmfam = {}
-    for key in mdict:
-        x = Counter(mdict[key])
-        # Take the top 2 item with highest count in list
-        possible_fam = x.most_common(2)
+    for key, subdict in mdict.items():
+        # Flatten the list of families and count occurences
+        families = [fam for sublist in subdict.values() for fam in sublist]
+        count = Counter(families)
 
-        if len(possible_fam) == 1:
-            fam = possible_fam[0][0]
-        elif len(possible_fam) > 1:
-            if len(possible_fam[0][1]) == len(possible_fam[1][1]):  # type: ignore[type-supported]
-                fam = f"CONFLICT {possible_fam[0][0]}" + f" and {possible_fam[1][0]}"
-            elif len(possible_fam[0][1]) > len(possible_fam[1][1]):  # type: ignore[type-supported]
-                fam = possible_fam[0][0]
+        # Find the most common families
+        most_common_fams = count.most_common(2)
+
+        if len(most_common_fams) == 1:
+            fam = most_common_fams[0][0]
+        else:
+            top_fam, second_fam = most_common_fams
+            if top_fam[1] == second_fam[1]:
+                fam = f"CONFLICT {top_fam[0]} and {second_fam[0]}"
             else:
-                fam = possible_fam[1][0]
-
+                fam = top_fam[0]
         pssmfam[key] = fam
-
     return pssmfam
 
 
