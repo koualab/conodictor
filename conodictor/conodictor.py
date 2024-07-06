@@ -49,20 +49,18 @@ def main() -> None:
     startime = datetime.datetime.now(tz=datetime.timezone.utc)
     seqdata = None
     # Start program ---------------------------------------------------------
-    logging.info("This is conodictor %s", VERSION)
-    logging.info("Written by %s", AUTHOR)
-    logging.info("Available at %s", URL)
     logging.info(
-        "Localtime is %s",
-        datetime.datetime.now(tz=datetime.timezone.utc).strftime("%H:%M:%S"),
+        "This is conodictor %s\nWritten by %s\nAvailable at %s",
+        VERSION,
+        AUTHOR,
+        URL,
     )
     # Get current user name
     try:
         user = os.environ["USER"]
     except KeyError:
         user = "not telling me who you are"
-    logging.info("You are %s", user)
-    logging.info("Operating system is %s", platform.system())
+    logging.info("You are %s\nOperating system is %s", user, platform.system())
 
     # Decompressing input file if needed
     if not Path.exists(args.out):
@@ -95,7 +93,6 @@ def main() -> None:
     else:
         seqdata = Path(uncompressed_input)
 
-    hres = {}
     infile = pyfastx.Fasta(str(seqdata))
     seqids = infile.keys()
     # If --ndup is specified, get sequence ids of duplicate sequence
@@ -111,6 +108,7 @@ def main() -> None:
     logging.info(
         "Searching hidden markov models profiles against the sequences",
     )
+    hres = {}
     conolib.run_hmm(seqdata, hres, cpus)
 
     logging.info("Parsing result")
@@ -173,8 +171,7 @@ def main() -> None:
             Path(args.out, "summary.csv"),
             Path(args.out, "superfamilies_distribution.png"),
         )
-    logging.info("Done creating donut plot")
-    logging.info("Classification finished successfully")
+    logging.info("Done creating donut plot\nClassification finished successfully")
     logging.info("Check %s folder for results", args.out)
     logging.info("Walltime used (hh:mm:ss.ms): %s", conolib.elapsed_since(startime))
     if len(seqids) % 2:

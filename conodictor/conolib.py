@@ -487,9 +487,15 @@ def run_pssm(infile: Path, outdir: str, cpus: int) -> Path:
 def split_fasta_file(input_file: Path, max_records: int = 25000) -> Path:
     """Splits a FASTA file into multiple files with a maximum number of records in each.
 
-    :param input_file: Path to the input FASTA file.
-    :param max_records: Maximum number of records per split file.
-    :return: Path to the directory containing the split files.
+    Args:
+    ----
+    input_file: Path to the input FASTA file.
+    max_records: Maximum number of records per split file.
+
+    Returns:
+    -------
+    Path to the directory containing the split files.
+
     """  # noqa: D401
     # Create a directory to store the split files
     base_name = Path(input_file).name
@@ -561,22 +567,51 @@ def read_first_fasta_record(file_path: Path) -> str:
 
 
 def isdnaorproteins(s: str) -> str:
-    """Isdnaorproteins test if input sequence is DNA or proteins.
+    """Determine if the input sequence is DNA or proteins.
 
-    s input sequence
+    Args:
+    ----
+    s: input sequence
+
+    Returns:
+    -------
+    'DNA' if the sequence is DNA, 'protein' if it is a protein, otherwise 'unknown'
+
     """
-    dna = "ATCG"
-    prot = "ABCDEFGHIKLMNPQRSTVWYZ*X"
-    stype = ""
+    dna_set = {"A", "T", "C", "G"}
+    protein_set = {
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "K",
+        "L",
+        "M",
+        "N",
+        "P",
+        "Q",
+        "R",
+        "S",
+        "T",
+        "V",
+        "W",
+        "Y",
+        "Z",
+        "*",
+        "X",
+    }
 
-    if all(i in dna for i in s):
-        stype = "DNA"
-    elif all(i in prot for i in s):
-        stype = "protein"
+    if set(s).issubset(dna_set):
+        return "DNA"
+    elif set(s).issubset(protein_set):
+        return "protein"
     else:
-        stype = "unknown"
-
-    return stype
+        return "unknown"
 
 
 def decompress_file(input_file: str, outdir: str) -> str:
@@ -719,9 +754,16 @@ def elapsed_since(start: datetime.datetime) -> datetime.timedelta:
 def do_translation(infile: str, outfile: Path, sw: int = 60) -> None:
     """Translate a DNA fasta file into a proteins fasta file.
 
-    `infile` Pyfasta object.
-    `outfile` Output file.
-    `sw` Sequence width. Default: 60.
+    Args:
+    ----
+    infile: input file path as string.
+    outfile: Output file as path.
+    sw: Sequence width. Default: 60.
+
+    Returns:
+    -------
+    Translated sequences
+
     """
     fa = pyfastx.Fasta(infile)
     output_path = Path(f"{outfile}_allpep.fa")
@@ -750,7 +792,14 @@ def do_translation(infile: str, outfile: Path, sw: int = 60) -> None:
 def _translate_seq(seq: str) -> list[str]:
     """Translate DNA sequence to proteins in the six frames.
 
-    :seq: DNA sequence to translate.
+    Args:
+    ----
+    seq: DNA sequence to translate.
+
+    Returns:
+    -------
+    A list of amino-acids in six frames
+
     """
     rc_seq = reverse_complement(seq)
     return [
