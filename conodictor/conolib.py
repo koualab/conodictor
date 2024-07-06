@@ -263,41 +263,43 @@ def donut_graph(ncol: int, stat_file: Path, outfile: Path) -> None:
     outfile: Path to save the output graph.
 
     """
-    # Read the CSV file and extract the relevant column data
-    data = pd.read_csv(stat_file)
-    plot_data = data.iloc[:, ncol].tolist()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        # Read the CSV file and extract the relevant column data
+        data = pd.read_csv(stat_file)
+        plot_data = data.iloc[:, ncol].tolist()
 
-    # Count occurrences of each unique value in the column
-    dtc = Counter(plot_data)
+        # Count occurrences of each unique value in the column
+        dtc = Counter(plot_data)
 
-    # Filter out "CONFLICT" and "UNKNOWN" entries from labels and values
-    filtered_items = [
-        (k, v)
-        for k, v in sorted(dtc.items())
-        if not k.startswith(("CONFLICT", "UNKNOWN"))
-    ]
-    labels = [f"{k}: {v}" for k, v in filtered_items]
-    values = [v for _, v in filtered_items]
+        # Filter out "CONFLICT" and "UNKNOWN" entries from labels and values
+        filtered_items = [
+            (k, v)
+            for k, v in sorted(dtc.items())
+            if not k.startswith(("CONFLICT", "UNKNOWN"))
+        ]
+        labels = [f"{k}: {v}" for k, v in filtered_items]
+        values = [v for _, v in filtered_items]
 
-    # Create the donut plot
-    fig, ax = plt.subplots(figsize=(13, 10), subplot_kw={"aspect": "equal"})
-    wedges, _ = ax.pie(  # type: ignore[type-supported]
-        values,
-        wedgeprops={"width": 0.5},
-        startangle=-40,
-        shadow=False,
-    )
+        # Create the donut plot
+        fig, ax = plt.subplots(figsize=(13, 10), subplot_kw={"aspect": "equal"})
+        wedges, _ = ax.pie(  # type: ignore[type-supported]
+            values,
+            wedgeprops={"width": 0.5},
+            startangle=-40,
+            shadow=False,
+        )
 
-    # Add legend and title
-    ax.legend(wedges, labels, loc="lower center", ncol=6)
-    ax.set_title("ConoDictor Predictions")
+        # Add legend and title
+        ax.legend(wedges, labels, loc="lower center", ncol=6)
+        ax.set_title("ConoDictor Predictions")
 
-    # Add version text
-    plt.text(-2, -1.5, f"Made with ConoDictor v{VERSION}")
+        # Add version text
+        plt.text(-2, -1.5, f"Made with ConoDictor v{VERSION}")
 
-    # Save the figure
-    plt.savefig(outfile, dpi=300)
-    plt.close(fig)  # Close the figure to avoid resource warning
+        # Save the figure
+        plt.savefig(outfile, dpi=300)
+        plt.close(fig)  # Close the figure to avoid resource warning
 
 
 def get_stats(seqid: str, file_path: Path) -> list[int]:
@@ -766,7 +768,7 @@ def do_translation(infile: str, outfile: Path, sw: int = 60) -> None:
 
     """
     fa = pyfastx.Fasta(infile)
-    output_path = Path(f"{outfile}_allpep.fa")
+    output_path = Path(outfile)
     # Use buffer to reduce I/O operations
     buffer_size = 1024 * 1024  # 1 MB buffer
     buffer = []

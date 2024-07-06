@@ -15,13 +15,15 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-import contextlib
 import datetime
 import logging
 import os
 import platform
+import random
+import shutil
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pyfastx
 
@@ -48,24 +50,34 @@ def main() -> None:
     # Record start time
     startime = datetime.datetime.now(tz=datetime.timezone.utc)
     seqdata = None
+    tempdir = TemporaryDirectory()
     # Start program ---------------------------------------------------------
-    logging.info(
-        "This is conodictor %s\nWritten by %s\nAvailable at %s",
-        VERSION,
-        AUTHOR,
-        URL,
-    )
+    logging.info("This is conodictor %s", VERSION)
+    logging.info("Written by %s", AUTHOR)
+    logging.info("Available at %s", URL)
     # Get current user name
     try:
         user = os.environ["USER"]
     except KeyError:
         user = "not telling me who you are"
-    logging.info("You are %s\nOperating system is %s", user, platform.system())
+    logging.info("You are %s", user)
+    logging.info("Operating system is %s", platform.system())
 
     # Decompressing input file if needed
-    if not Path.exists(args.out):
+    if Path.exists(args.out) and not args.force:
+        logging.error(
+            "Output directory (%s) exists. Please use --force or change name",
+            args.out,
+        )
+        sys.exit(1)
+    elif Path.exists(args.out) and args.force:
+        logging.warning("Removing directory %s", args.out)
+        shutil.rmtree(args.out)
+        logging.info("New directory created")
         Path.mkdir(args.out)
-    uncompressed_input = conolib.decompress_file(str(args.file.name), args.out)
+    else:
+        Path.mkdir(args.out)
+    uncompressed_input = conolib.decompress_file(str(args.file.name), tempdir.name)
 
     # Check input for various potential problems
     check = conolib.check_input(Path(uncompressed_input))
@@ -87,9 +99,9 @@ def main() -> None:
         # translate sequences
         conolib.do_translation(
             uncompressed_input,
-            Path(args.out, "conodictor_translate.fa"),
+            Path(tempdir.name, "conodictor_translate.fa"),
         )
-        seqdata = Path(args.out, "conodictor_translate.fa")
+        seqdata = Path(tempdir.name, "conodictor_translate.fa")
     else:
         seqdata = Path(uncompressed_input)
 
@@ -100,7 +112,7 @@ def main() -> None:
         args.ndup,
         args.mlen,
         seqdata,
-        args.out,
+        tempdir.name,
     )
 
     # HMM search pipeline
@@ -120,7 +132,7 @@ def main() -> None:
 
     # PSSM search pipeline
     logging.info("Running PSSM prediction")
-    pssm_out = conolib.run_pssm(seqdata, args.out, cpus)
+    pssm_out = conolib.run_pssm(seqdata, tempdir.name, cpus)
     logging.info("Parsing PSSM result")
     pssmdict = conolib.parse_pssm_result(pssm_out)
     pssmdict = conolib.clear_dict(pssmdict)
@@ -151,13 +163,6 @@ def main() -> None:
         )
 
     # Finishing -------------------------------------------------------------
-    if not args.debug:
-        logging.info("Cleaning around")
-        with contextlib.suppress(OSError):
-            Path.unlink(seqdata)
-            Path.unlink(Path(f"{seqdata}.fxi"))
-            Path.unlink(Path(args.out, "out.pssm"))
-
     logging.info("Creating donut plot")
     if args.mlen:
         conolib.donut_graph(
@@ -171,10 +176,11 @@ def main() -> None:
             Path(args.out, "summary.csv"),
             Path(args.out, "superfamilies_distribution.png"),
         )
-    logging.info("Done creating donut plot\nClassification finished successfully")
+    logging.info("Classification finished successfully")
+    logging.info("Done creating donut plot")
     logging.info("Check %s folder for results", args.out)
     logging.info("Walltime used (hh:mm:ss.ms): %s", conolib.elapsed_since(startime))
-    if len(seqids) % 2:
+    if len(seqids) % random.randint(1, 10):  # noqa: S311
         logging.info("Nice to have you. Share, enjoy and come back!")
     else:
         logging.info("Thanks you, come again.")
