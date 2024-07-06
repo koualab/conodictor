@@ -132,11 +132,10 @@ in a simple, easily reproducible situation.
 
 For commercial uses please contact Dominique Koua at dominique.koua@inphb.ci.
 
-## Citation
+## 🔖 Citation
 
-When using ConoDictor2 in your work, you should cite:
-
-Dominique Koua, Anicet Ebou, Sébastien Dutertre, Improved prediction of conopeptide superfamilies with ConoDictor 2.0, Bioinformatics Advances, Volume 1, Issue 1, 2021, vbab011, https://doi.org/10.1093/bioadv/vbab011.
+ConoDictor is a scientifc software, with a [published paper](https://doi.org/10.1093/bioadv/vbab011) in the [Bioinformatics Advances](https://academic.oup.com/bioinformaticsadvances) journal. Please cite this article if you are using it in an academic work, for instance as: 
+Koua, D., Ebou, A., & Dutertre, S. (2021). Improved prediction of conopeptide superfamilies with ConoDictor 2.0. Bioinformatics Advances, 1(1), vbab011. https://doi.org/10.1093/bioadv/vbab011
 
 
 ## Dependencies
