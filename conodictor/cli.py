@@ -21,13 +21,6 @@ parser.add_argument(
     help=argparse.SUPPRESS,
 )
 parser.add_argument(
-    "-d",
-    "--dir",
-    type=str,
-    metavar="STR",
-    help="specify database path",
-)
-parser.add_argument(
     "-o",
     "--out",
     nargs="?",

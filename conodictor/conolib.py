@@ -33,11 +33,25 @@ if TYPE_CHECKING:
     from pyhmmer.plan7 import HMMFile
 
 
-VERSION = "2.4"
+VERSION = "2.4.1"
 PSSM_SEQ_ID = 3
 CONOPEP_FAMILY = 0
 CONOPEP_FAMILY_NAME = 1
 PRO_REGION = 2
+
+
+def write_fasta(fampos: dict, hmmfam: dict, seqdata: Path, out: str) -> None:
+    """Write a fasta file of matched sequences."""
+    infile = pyfastx.Fasta(str(seqdata))
+    output_path = Path(out) / f"{seqdata.stem}_predicted.fa"
+
+    logging.info("Writing out fasta file of matched sequences")
+
+    with output_path.open("w") as faah:
+        for seqid, pos in fampos.items():
+            start, end = map(int, pos.split("-"))
+            sequence = infile[seqid].seq[start:end]
+            faah.write(f">{seqid} conodictor={hmmfam[seqid]}\n{sequence}\n")
 
 
 def is_min_occurence_activated(
@@ -689,11 +703,24 @@ def search_hmm_profiles(
                     result[hit_name] = [hmmresult]
 
 
-def get_hmm_superfamily(result_with_combined_evalue: dict) -> dict:
+def get_hmm_superfamily(
+    result_with_combined_evalue: dict,
+) -> tuple[dict, dict]:
     """Compare combined_evalues to get superfamilies."""
     seqfam = {}
-    for key, (fam_list, max_combined_evalue) in result_with_combined_evalue.items():
+    fampose = {}
+    for key, (
+        fam_list,
+        max_combined_evalue,
+        max_fam,
+    ) in result_with_combined_evalue.items():
         res = ""
+        for fam_dict in fam_list:
+            if (
+                max_combined_evalue >= 100 * fam_dict["combined_evalue"]
+                and fam_dict["combined_evalue"] != max_combined_evalue
+            ):
+                res = fam_dict["fam"]
         conflicts = [
             fam_dict["fam"]
             for fam_dict in fam_list
@@ -702,9 +729,12 @@ def get_hmm_superfamily(result_with_combined_evalue: dict) -> dict:
         if len(conflicts) > 1:
             res = f"Conflict between {', '.join(conflicts)}"
         else:
+            min_start = min(info["start"] for info in max_fam["info"])
+            max_end = max(info["end"] for info in max_fam["info"])
             res = conflicts[0]
         seqfam[key] = res
-    return seqfam
+        fampose[key] = f"{min_start}-{max_end}"
+    return seqfam, fampose
 
 
 def compute_combined_evalue(transformed_result: dict) -> dict:
@@ -712,6 +742,7 @@ def compute_combined_evalue(transformed_result: dict) -> dict:
     results = {}
     for key, fam_list in transformed_result.items():
         max_combined_evalue = None
+        max_fam = None
         for fam_dict in fam_list:
             combined_evalue = reduce(
                 operator.mul,
@@ -719,9 +750,11 @@ def compute_combined_evalue(transformed_result: dict) -> dict:
                 1,
             )
             fam_dict["combined_evalue"] = combined_evalue
+            # Save start and end of the fam with the max combined evalue
             if max_combined_evalue is None or combined_evalue > max_combined_evalue:
                 max_combined_evalue = combined_evalue
-        results[key] = fam_list, max_combined_evalue
+                max_fam = fam_dict
+        results[key] = fam_list, max_combined_evalue, max_fam
     return results
 
 

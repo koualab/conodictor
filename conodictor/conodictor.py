@@ -31,7 +31,7 @@ from . import cli, conolib
 
 AUTHOR = "Anicet Ebou and Dominique Koua"
 URL = "https://github.com/koualab/conodictor.git"
-VERSION = "2.4"
+VERSION = "2.4.1"
 
 # Define command-line arguments----------------------------------------------
 args = cli.args
@@ -125,10 +125,11 @@ def main() -> None:
 
     logging.info("Parsing result")
     new_dict = conolib.transform_hmm_result(hres)
+
     logging.info("Compute combined evalue for each superfamily")
     results = conolib.compute_combined_evalue(new_dict)
     logging.info("Predicting sequence superfamily base on HMM")
-    hmmfam = conolib.get_hmm_superfamily(results)
+    hmmfam, fampos = conolib.get_hmm_superfamily(results)
 
     # PSSM search pipeline
     logging.info("Running PSSM prediction")
@@ -145,6 +146,8 @@ def main() -> None:
     # Final families dict to store both predicted families
     finalfam = conolib.get_final_superfamilies(hmmfam, pssmfam, seqids)
 
+    if args.faa:
+        conolib.write_fasta(fampos, hmmfam, seqdata, args.out)
     # Enter "reads" mode
     if args.mlen:
         conolib.write_result_read_mode(
