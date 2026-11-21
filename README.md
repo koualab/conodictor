@@ -11,6 +11,38 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 
+> [!IMPORTANT]
+> **ConoDictor 3 is in preparation, and you can already use it online at <https://conodictor.bioinfstat.org>.**
+> The standalone code and the article describing the method will be released soon. Until then, the web server is
+> the way to try ConoDictor 3. We would be glad to hear how it works for you.
+
+## ConoDictor 3: try it before release
+
+ConoDictor 3 is a new version of ConoDictor. It was rebuilt from the latest UniProtKB release and gives:
+
+- **probabilities instead of scores**: each sequence gets a probability for every conopeptide superfamily and for
+  *none*, so sequences that are not conopeptides are identified explicitly;
+- **better classification of mature peptides** without their precursor, and far fewer false positives when screening
+  whole transcriptomes;
+- **precursor regions and mature peptides**: signal peptide, propeptide and mature peptide boundaries, cysteine
+  framework and predicted C-terminal amidation;
+- **protein or nucleotide input**: transcripts are translated into open reading frames automatically;
+- **an updated reference database**, rebuilt reproducibly from UniProtKB.
+
+The web server needs no installation or account. It accepts pasted sequences or files (FASTA or FASTQ, plain or
+compressed), shows region maps and probabilities for each sequence, and lets you download every result as CSV and
+FASTA. For larger analyses or pipelines, a [REST API](https://conodictor.bioinfstat.org/api) is available.
+
+**We welcome your feedback.** If something does not work, a result looks wrong, or a feature is missing, please use
+the [feedback form](https://conodictor.bioinfstat.org/feedback) (anonymous if you prefer) or open an
+[issue](https://github.com/koualab/conodictor/issues). Feedback received now will shape the release.
+
+**Citing.** Until the ConoDictor 3 article is published, please cite ConoDictor 2 (below) and mention that you used
+the ConoDictor 3 web server, with the date and the database release shown on your results page.
+
+ConoDictor 2 remains available in this repository and on Bioconda, and its results are unchanged.
+
+
 ## 🗺️ Overview
 ### Unlocking the Potential of Cone Snail Venom
 Cone snails are a treasure trove of natural peptides with immense pharmacological and therapeutic potential. The advent of affordable RNA sequencing (RNAseq) has revolutionized the mining of novel bioactive conopeptides from venom gland transcriptomes. However, the complexity of bioinformatic analyses often impedes the discovery process.
